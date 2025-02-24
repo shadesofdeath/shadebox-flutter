@@ -94,18 +94,23 @@ jobs:
       - name: Build Linux
         run: flutter build linux --release
         
+      - name: Check Build Directory
+        run: |
+          ls -la build/linux/x64/release/bundle
+          
+      - name: Create Archive Directory
+        run: mkdir -p release-builds
+        
       - name: Archive Linux Release
-        uses: thedoctor0/zip-release@0.7.1
-        with:
-          type: 'zip'
-          filename: 'linux-release.zip'
-          directory: build/linux/x64/release/bundle
+        run: |
+          cd build/linux/x64/release/bundle
+          zip -r ../../../../release-builds/linux-release.zip ./*
 
       - name: Upload Linux Artifact
         uses: actions/upload-artifact@v3
         with:
           name: linux-build
-          path: linux-release.zip
+          path: release-builds/linux-release.zip
 
   create-release:
     needs: [build-windows, build-linux]
