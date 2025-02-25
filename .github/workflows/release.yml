@@ -106,11 +106,19 @@ jobs:
       - name: Archive Linux Release
         run: |
           cd build/linux/x64/release/bundle
-          zip -r ../../../../../release-builds/linux-release.zip * -x "*.so.*" "*.so"
-          cd ..
-          cp bundle/*.so* bundle/lib/
-          cd bundle
-          zip -r ../../../../../release-builds/linux-release.zip lib/
+          # Önce tüm dosyaları zip'le
+          zip -r ../../../../../release-builds/linux-release.zip *
+          
+          # Eğer lib klasörü yoksa oluştur
+          mkdir -p lib
+          
+          # .so dosyalarını lib klasörüne kopyala (varsa)
+          find . -name "*.so*" -exec cp --parents {} lib/ \;
+          
+          # lib klasörünü de zip'e ekle
+          if [ -d "lib" ]; then
+            zip -ur ../../../../../release-builds/linux-release.zip lib/
+          fi
 
       - name: Upload Linux Artifact
         uses: actions/upload-artifact@v4
