@@ -15,7 +15,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Sinewix',
+      title: 'ShadeBox',
       themeMode: ThemeMode.system,
       darkTheme: ThemeData(
         useMaterial3: true,
