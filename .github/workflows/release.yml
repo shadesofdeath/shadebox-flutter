@@ -96,14 +96,11 @@ jobs:
         
       - name: Create Archive Directory
         run: mkdir -p release-builds
-
+        
       - name: Archive Linux Release
-        uses: thedoctor0/zip-release@0.7.1
-        with:
-          type: 'zip'
-          filename: 'linux-release.zip'
-          directory: build/linux/x64/release/bundle
-          path: release-builds
+        run: |
+          cd build/linux/x64/release/bundle
+          zip -r ../../../../../release-builds/linux-release.zip *
 
       - name: Upload Linux Artifact
         uses: actions/upload-artifact@v4
