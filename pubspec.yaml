@@ -41,6 +41,16 @@ dependencies:
   html: ^0.15.5
   file_picker: ^9.0.1
   dio: ^5.8.0+1
+  flutter_launcher_icons: ^0.14.3
+
+flutter_launcher_icons:
+  image_path: "assets/app_icon.png"
+  android: true
+  ios: true
+  web: true
+  windows: true
+  macos: true
+  linux: true
 
 dev_dependencies:
   flutter_test:

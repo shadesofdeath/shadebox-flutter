@@ -94,13 +94,22 @@ jobs:
       - name: Build Linux
         run: flutter build linux --release
         
+      - name: Make Linux Binary Executable
+        run: |
+          cd build/linux/x64/release/bundle
+          chmod +x shadebox
+        
       - name: Create Archive Directory
         run: mkdir -p release-builds
         
       - name: Archive Linux Release
         run: |
           cd build/linux/x64/release/bundle
-          zip -r ../../../../../release-builds/linux-release.zip *
+          zip -r ../../../../../release-builds/linux-release.zip * -x "*.so.*" "*.so"
+          cd ..
+          cp bundle/*.so* bundle/lib/
+          cd bundle
+          zip -r ../../../../../release-builds/linux-release.zip lib/
 
       - name: Upload Linux Artifact
         uses: actions/upload-artifact@v4
@@ -121,11 +130,22 @@ jobs:
       - name: List Downloaded Artifacts
         run: ls -R artifacts/
 
+      - name: Generate Release Tag
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          echo "RELEASE_TAG=${{ github.event.inputs.version }}" >> $GITHUB_ENV
+          git tag ${{ github.event.inputs.version }}
+          git push origin ${{ github.event.inputs.version }}
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          tag_name: ${{ github.event.inputs.version }}
+          name: Release ${{ github.event.inputs.version }}
           files: |
             artifacts/windows-build/windows-release.zip
             artifacts/linux-build/linux-release.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          draft: false
+          prerelease: false
