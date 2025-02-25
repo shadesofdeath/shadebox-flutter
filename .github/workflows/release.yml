@@ -62,6 +62,7 @@ jobs:
         with:
           name: windows-build
           path: release-builds/windows-release.zip
+          if-no-files-found: error
         
   build-linux:
     runs-on: ubuntu-latest
@@ -93,18 +94,23 @@ jobs:
       - name: Build Linux
         run: flutter build linux --release
         
+      - name: Create Archive Directory
+        run: mkdir -p release-builds
+
       - name: Archive Linux Release
         uses: thedoctor0/zip-release@0.7.1
         with:
           type: 'zip'
           filename: 'linux-release.zip'
           directory: build/linux/x64/release/bundle
+          path: release-builds
 
       - name: Upload Linux Artifact
         uses: actions/upload-artifact@v4
         with:
           name: linux-build
-          path: linux-release.zip
+          path: release-builds/linux-release.zip
+          if-no-files-found: error
 
   create-release:
     needs: [build-windows, build-linux]
@@ -112,13 +118,17 @@ jobs:
     steps:
       - name: Download Artifacts
         uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List Downloaded Artifacts
+        run: ls -R artifacts/
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
-            windows-build/windows-release.zip
-            linux-build/linux-release.zip
+            artifacts/windows-build/windows-release.zip
+            artifacts/linux-build/linux-release.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
