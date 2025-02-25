@@ -10,6 +10,7 @@ on:
   push:
     tags:
       - "v*.*.*"
+    branches: [ main ]
 
 permissions:
   contents: write
@@ -130,22 +131,23 @@ jobs:
       - name: List Downloaded Artifacts
         run: ls -R artifacts/
 
-      - name: Generate Release Tag
-        if: github.event_name == 'workflow_dispatch'
+      - name: Get version from pubspec.yaml
+        id: version
         run: |
-          echo "RELEASE_TAG=${{ github.event.inputs.version }}" >> $GITHUB_ENV
-          git tag ${{ github.event.inputs.version }}
-          git push origin ${{ github.event.inputs.version }}
+          VERSION=$(grep 'version:' pubspec.yaml | sed 's/version: //')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create Tag
+        run: |
+          git tag v${{ steps.version.outputs.version }}
+          git push origin v${{ steps.version.outputs.version }}
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ github.event.inputs.version }}
-          name: Release ${{ github.event.inputs.version }}
-          files: |
-            artifacts/windows-build/windows-release.zip
-            artifacts/linux-build/linux-release.zip
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Release v${{ steps.version.outputs.version }}
           draft: false
           prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
