@@ -1,15 +1,18 @@
 import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'dart:convert';
-import 'dart:async'; // StreamController için eklendi
+import 'dart:async'; 
 import 'package:http/http.dart' as http;
+import 'package:shadebox/pages/download_manager.dart';
+import 'package:shadebox/pages/downloads_page.dart';
+import 'package:shadebox/utils/mediafire_extractor.dart';
 import 'package:video_player/video_player.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:shadebox/widgets/video_player_dialog.dart';
 
 class Movie {
   final int id;
@@ -183,6 +186,7 @@ class _SinewixFilmPageState extends State<SinewixFilmPage> {
   String? _selectedCategory;
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
+  final ImageCache imageCache = PaintingBinding.instance.imageCache;
 
   final List<Category> _categories = [
     Category(id: "all", name: "Tüm Filmler", url: "/sinewix/movies"),
@@ -201,16 +205,26 @@ class _SinewixFilmPageState extends State<SinewixFilmPage> {
   @override
   void initState() {
     super.initState();
+    // Görüntü önbellek limitlerini ayarla
+    imageCache.maximumSize = 100; // Önbellekteki maksimum görüntü sayısı
+    imageCache.maximumSizeBytes = 50 * 1024 * 1024; // 50 MB maksimum önbellek boyutu
+    
     _selectedCategory = _categories.first.id;
     _scrollController.addListener(_scrollListener);
     _fetchMovies();
   }
 
   void _scrollListener() {
-    if (_scrollController.position.pixels == _scrollController.position.maxScrollExtent) {
+    if (_scrollController.position.pixels >
+        _scrollController.position.maxScrollExtent - 1000) {
       if (!_isLoadingMore) {
         _loadMore();
       }
+    }
+
+    // Viewport dışındaki görüntüleri temizle
+    if (!_scrollController.position.isScrollingNotifier.value) {
+      _cleanupImages();
     }
   }
 
@@ -218,6 +232,8 @@ class _SinewixFilmPageState extends State<SinewixFilmPage> {
     if (refresh) {
       _currentPage = 1;
       _movies.clear();
+      imageCache.clear();
+      imageCache.clearLiveImages();
     }
 
     setState(() => _isLoading = true);
@@ -225,16 +241,20 @@ class _SinewixFilmPageState extends State<SinewixFilmPage> {
     try {
       final category = _categories.firstWhere((c) => c.id == _selectedCategory);
       
-      // İlk açılışta 2 sayfa çek
+      // İlk açılışta 3 sayfa çek
       if (_movies.isEmpty) {
         final futures = [
           http.get(
             Uri.parse('$_mainUrl${category.url}/1'),
-            headers: {'Accept-Charset': 'utf-8'},  // Add UTF-8 header
+            headers: {'Accept-Charset': 'utf-8'},
           ),
           http.get(
             Uri.parse('$_mainUrl${category.url}/2'),
-            headers: {'Accept-Charset': 'utf-8'},  // Add UTF-8 header
+            headers: {'Accept-Charset': 'utf-8'},
+          ),
+          http.get(
+            Uri.parse('$_mainUrl${category.url}/3'),
+            headers: {'Accept-Charset': 'utf-8'},
           ),
         ];
 
@@ -243,7 +263,7 @@ class _SinewixFilmPageState extends State<SinewixFilmPage> {
 
         for (var response in responses) {
           if (response.statusCode == 200) {
-            final data = json.decode(utf8.decode(response.bodyBytes));  // Use utf8.decode
+            final data = json.decode(utf8.decode(response.bodyBytes));
             allMovies.addAll(
               (data['data'] as List).map((movieJson) => Movie.fromJson(movieJson))
             );
@@ -254,7 +274,7 @@ class _SinewixFilmPageState extends State<SinewixFilmPage> {
           _movies = allMovies;
           _filteredMovies = allMovies;
           _isLoading = false;
-          _currentPage = 2; // Sonraki sayfa için
+          _currentPage = 3; // Sonraki sayfa için 3'ten başla
         });
       } else {
         // Normal sayfa yükleme
@@ -438,16 +458,11 @@ class _SinewixFilmPageState extends State<SinewixFilmPage> {
                                               size: 40,
                                               color: Colors.white,
                                             ),
-                                            onPressed: () async {
+                                            onPressed: () {
                                               final videoUrl = movieDetail.videos.first.link;
-                                              final result = await showDialog<bool>(
-                                                context: context,
-                                                barrierDismissible: false,
-                                                builder: (context) => DownloadDialog(
-                                                  url: videoUrl,
-                                                  fileName: '${movieDetail.title}',
-                                                ),
-                                              );
+                                              final title = movieDetail.title;
+                                              Navigator.pop(context); // Dialog'u kapat
+                                              _handleDownload(videoUrl, title); // İndirme işlemini başlat
                                             },
                                           ),
                                         ),
@@ -668,444 +683,287 @@ class _SinewixFilmPageState extends State<SinewixFilmPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Row(
-            children: [
-              Expanded(
-                flex: 3,
-                child: TextField(
-                  controller: _searchController,
-                  onChanged: (query) {
-                    if (query.length >= 3) {
-                      _searchMovies(query);
-                    } else if (query.isEmpty) {
-                      setState(() => _filteredMovies = _movies);
-                    }
-                  },
-                  decoration: InputDecoration(
-                    hintText: 'Film Ara... (En az 3 karakter)',
-                    prefixIcon: const Icon(Icons.search),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    filled: true,
-                    fillColor: Theme.of(context).colorScheme.surface,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                flex: 1,
-                child: DropdownButtonFormField<String>(
-                  value: _selectedCategory,
-                  decoration: InputDecoration(
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    filled: true,
-                    fillColor: Theme.of(context).colorScheme.surface,
-                  ),
-                  items: _categories.map((Category category) {
-                    return DropdownMenuItem(
-                      value: category.id,
-                      child: Text(category.name),
-                    );
-                  }).toList(),
-                  onChanged: (String? newValue) {
-                    setState(() {
-                      _selectedCategory = newValue;
-                      _searchController.clear();
-                      _fetchMovies(refresh: true);
-                    });
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: _isLoading && _movies.isEmpty
-              ? const Center(child: CircularProgressIndicator())
-              : _filteredMovies.isEmpty
-                  ? const Center(child: Text('Film bulunamadı'))
-                  : GridView.builder(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.all(12),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 8,
-                        childAspectRatio: 0.65,
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing: 16,
-                      ),
-                      itemCount: _filteredMovies.length + (_isLoadingMore ? 1 : 0),
-                      itemBuilder: (context, index) {
-                        if (index == _filteredMovies.length) {
-                          return const Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(8.0),
-                              child: CircularProgressIndicator(),
-                            ),
-                          );
+    return Scaffold( // Column yerine Scaffold kullanıyoruz
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0), // padding'i küçülttük
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: SizedBox(
+                    height: 40, // Yüksekliği küçülttük
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (query) {
+                        if (query.length >= 3) {
+                          _searchMovies(query);
+                        } else if (query.isEmpty) {
+                          setState(() => _filteredMovies = _movies);
                         }
-                        final movie = _filteredMovies[index];
-                        return Card(
-                          elevation: 0,
-                          color: Theme.of(context).colorScheme.surface,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            side: BorderSide(
-                              color: Theme.of(context).colorScheme.outline.withOpacity(0.1),
-                              width: 1,
-                            ),
-                          ),
-                          child: InkWell(
-                            onTap: () => _showMovieDetails(movie),
-                            borderRadius: BorderRadius.circular(8),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Expanded(
-                                  child: Stack(
-                                    fit: StackFit.expand,
-                                    children: [
-                                      ClipRRect(
-                                        borderRadius: const BorderRadius.vertical(
-                                          top: Radius.circular(8),
-                                        ),
-                                        child: Image.network(
-                                          movie.posterPath,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (context, error, stackTrace) =>
-                                              const Icon(Icons.error, size: 20),
-                                        ),
-                                      ),
-                                      Positioned(
-                                        top: 8,
-                                        right: 8,
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 6,
-                                            vertical: 2,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: Theme.of(context).colorScheme.surface.withOpacity(0.8),
-                                            borderRadius: BorderRadius.circular(4),
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              const Icon(
-                                                Icons.star_rounded,
-                                                size: 14,
-                                                color: Colors.amber,
-                                              ),
-                                              const SizedBox(width: 2),
-                                              Text(
-                                                movie.voteAverage.toStringAsFixed(1),
-                                                style: const TextStyle(
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.w500,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.all(8.0),
-                                  child: Text(
-                                    movie.title,
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    textAlign: TextAlign.center,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+                      },
+                      decoration: InputDecoration(
+                        hintText: 'Film Ara... (En az 3 karakter)',
+                        hintStyle: const TextStyle(fontSize: 13), // Font boyutunu küçülttük
+                        prefixIcon: const Icon(Icons.search, size: 20), // İkon boyutunu küçülttük
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 12), // İç padding'i küçülttük
+                        filled: true,
+                        fillColor: Theme.of(context).colorScheme.surface,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  flex: 1,
+                  child: SizedBox(
+                    height: 40, // Yüksekliği küçülttük
+                    child: DropdownButtonFormField<String>(
+                      value: _selectedCategory,
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0), // İç padding'i küçülttük
+                        filled: true,
+                        fillColor: Theme.of(context).colorScheme.surface,
+                      ),
+                      style: const TextStyle(fontSize: 13), // Font boyutunu küçülttük
+                      items: _categories.map((Category category) {
+                        return DropdownMenuItem(
+                          value: category.id,
+                          child: Text(category.name),
                         );
+                      }).toList(),
+                      onChanged: (String? newValue) {
+                        setState(() {
+                          _selectedCategory = newValue;
+                          _searchController.clear();
+                          _fetchMovies(refresh: true);
+                        });
                       },
                     ),
-        ),
-      ],
-    );
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    _scrollController.dispose();
-    super.dispose();
-  }
-}
-
-class VideoPlayerDialog extends StatefulWidget {
-  final String videoUrl;
-  final String title;
-
-  const VideoPlayerDialog({
-    Key? key,
-    required this.videoUrl,
-    required this.title,
-  }) : super(key: key);
-
-  @override
-  State<VideoPlayerDialog> createState() => _VideoPlayerDialogState();
-}
-
-class _VideoPlayerDialogState extends State<VideoPlayerDialog> {
-  late final player = Player();
-  late final controller = VideoController(player);
-  double subtitleFontSize = 32.0;
-
-  @override
-  void initState() {
-    super.initState();
-    _initializePlayer();
-  }
-
-  Future<void> _initializePlayer() async {
-    try {
-      await player.open(Media(widget.videoUrl));
-    } catch (e) {
-      debugPrint('Video yüklenirken hata: $e');
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: EdgeInsets.zero,
-      child: Container(
-        width: MediaQuery.of(context).size.width * 0.8,
-        height: MediaQuery.of(context).size.height * 0.8,
-        decoration: BoxDecoration(
-          color: Colors.black,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: const BoxDecoration(
-                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      widget.title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
                   ),
-                  StreamBuilder(
-                    stream: player.stream.tracks,
-                    builder: (context, snapshot) {
-                      final audioTracks = player.state.tracks.audio;
-                      final subtitleTracks = player.state.tracks.subtitle;
-                      final videoTracks = player.state.tracks.video;
-
-                      return Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // Ses kanalları menüsü
-                          if (audioTracks.isNotEmpty)
-                            PopupMenuButton<AudioTrack>(
-                              icon: const Icon(Icons.audiotrack, color: Colors.white),
-                              tooltip: 'Ses & Dublaj',
-                              position: PopupMenuPosition.under,
-                              itemBuilder: (context) => [
-                                for (var track in audioTracks)
-                                  PopupMenuItem(
-                                    value: track,
-                                    child: Row(
-                                      children: [
-                                        Icon(
-                                          track == player.state.track.audio
-                                              ? Icons.radio_button_checked
-                                              : Icons.radio_button_unchecked,
-                                          size: 18,
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Text(
-                                            track.title ?? 'Ses ${track.id}',
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: _isLoading && _movies.isEmpty
+                ? const Center(child: CircularProgressIndicator())
+                : _filteredMovies.isEmpty
+                    ? const Center(child: Text('Film bulunamadı'))
+                    : GridView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.all(16),
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 8,
+                          childAspectRatio: 0.65,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 16,
+                        ),
+                        itemCount: _filteredMovies.length + (_isLoadingMore ? 1 : 0),
+                        itemBuilder: (context, index) {
+                          if (index == _filteredMovies.length) {
+                            return const Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(8.0),
+                                child: CircularProgressIndicator(),
+                              ),
+                            );
+                          }
+                          final movie = _filteredMovies[index];
+                          return LayoutBuilder(
+                            builder: (context, constraints) {
+                              return Card(
+                                elevation: 0,
+                                clipBehavior: Clip.hardEdge, // Bunu ekledik
+                                color: Theme.of(context).colorScheme.surface,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  side: BorderSide(
+                                    color: Theme.of(context).colorScheme.outline.withOpacity(0.1),
+                                    width: 1,
                                   ),
-                              ],
-                              onSelected: player.setAudioTrack,
-                            ),
-
-                          if (subtitleTracks.isNotEmpty) ...[
-                            const SizedBox(width: 8),
-                            PopupMenuButton<SubtitleTrack>(
-                              icon: const Icon(Icons.subtitles, color: Colors.white),
-                              tooltip: 'Altyazı',
-                              position: PopupMenuPosition.under,
-                              itemBuilder: (context) => [
-                                PopupMenuItem(
-                                  value: SubtitleTrack.no(),
-                                  child: Row(
+                                ),
+                                child: InkWell(
+                                  onTap: () => _showMovieDetails(movie),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.stretch, // Bunu ekledik
                                     children: [
-                                      Icon(
-                                        player.state.track.subtitle == null
-                                            ? Icons.radio_button_checked
-                                            : Icons.radio_button_unchecked,
-                                        size: 18,
+                                      Expanded(
+                                        child: Stack(
+                                          fit: StackFit.expand,
+                                          children: [
+                                            Image.network(
+                                              movie.posterPath,
+                                              fit: BoxFit.cover,
+                                              width: double.infinity, // Bunu ekledik
+                                              height: double.infinity, // Bunu ekledik
+                                              // Görüntü yükleme optimizasyonları
+                                              frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                                                if (wasSynchronouslyLoaded) return child;
+                                                return AnimatedSwitcher(
+                                                  duration: const Duration(milliseconds: 300),
+                                                  child: frame != null
+                                                      ? child
+                                                      : Container(
+                                                          color: Colors.grey[800],
+                                                          child: const Center(
+                                                            child: CircularProgressIndicator(),
+                                                          ),
+                                                        ),
+                                                );
+                                              },
+                                              errorBuilder: (context, error, stackTrace) =>
+                                                  Container(
+                                                    color: Colors.grey[900],
+                                                    child: const Icon(
+                                                      Icons.error_outline,
+                                                      color: Colors.white54,
+                                                    ),
+                                                  ),
+                                              // Görüntü kalitesi ve boyut optimizasyonları  
+                                              cacheWidth: (constraints.maxWidth * 2).toInt(),
+                                              cacheHeight: (constraints.maxHeight * 2).toInt(),
+                                              filterQuality: FilterQuality.medium,
+                                            ),
+                                            Positioned(
+                                              top: 8,
+                                              right: 8,
+                                              child: Container(
+                                                padding: const EdgeInsets.symmetric(
+                                                  horizontal: 6,
+                                                  vertical: 2,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: Theme.of(context).colorScheme.surface.withOpacity(0.8),
+                                                  borderRadius: BorderRadius.circular(4),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    const Icon(
+                                                      Icons.star_rounded,
+                                                      size: 14,
+                                                      color: Colors.amber,
+                                                    ),
+                                                    const SizedBox(width: 2),
+                                                    Text(
+                                                      movie.voteAverage.toStringAsFixed(1),
+                                                      style: const TextStyle(
+                                                        fontSize: 12,
+                                                        fontWeight: FontWeight.w500,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
-                                      const SizedBox(width: 8),
-                                      const Text('Kapalı'),
+                                      Padding(
+                                        padding: const EdgeInsets.all(8.0),
+                                        child: Text(
+                                          movie.title,
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ),
-                                for (var track in subtitleTracks)
-                                  PopupMenuItem(
-                                    value: track,
-                                    child: Row(
-                                      children: [
-                                        Icon(
-                                          track == player.state.track.subtitle
-                                              ? Icons.radio_button_checked
-                                              : Icons.radio_button_unchecked,
-                                          size: 18,
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Text(
-                                            track.title ?? 'Altyazı ${track.id}',
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                              ],
-                              onSelected: player.setSubtitleTrack,
-                            ),
-
-                            PopupMenuButton<void>(
-                              icon: const Icon(Icons.text_fields, color: Colors.white),
-                              tooltip: 'Altyazı Boyutu',
-                              position: PopupMenuPosition.under,
-                              itemBuilder: (context) => <PopupMenuEntry<void>>[
-                                PopupMenuItem<void>(
-                                  enabled: false,
-                                  height: 48,
-                                  child: StatefulBuilder(
-                                    builder: (context, setMenuState) => SizedBox(
-                                      width: 200,
-                                      child: Slider(
-                                        value: subtitleFontSize,
-                                        min: 32,
-                                        max: 140,
-                                        divisions: 10,
-                                        label: '${(subtitleFontSize / 32).round()}x',
-                                        onChanged: (value) {
-                                          setMenuState(() {
-                                            setState(() {
-                                              subtitleFontSize = value;
-                                            });
-                                          });
-                                        },
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-
-                          if (videoTracks.isNotEmpty) ...[
-                            const SizedBox(width: 8),
-                            PopupMenuButton<VideoTrack>(
-                              icon: const Icon(Icons.hd, color: Colors.white),
-                              tooltip: 'Video Kalitesi',
-                              position: PopupMenuPosition.under,
-                              itemBuilder: (context) => [
-                                for (var track in videoTracks)
-                                  PopupMenuItem(
-                                    value: track,
-                                    child: Row(
-                                      children: [
-                                        Icon(
-                                          track == player.state.track.video
-                                              ? Icons.radio_button_checked
-                                              : Icons.radio_button_unchecked,
-                                          size: 18,
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Text(
-                                            track.title ?? 'Video ${track.id}',
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                              ],
-                              onSelected: player.setVideoTrack,
-                            ),
-                          ],
-
-                          const SizedBox(width: 8),
-                          IconButton(
-                            icon: const Icon(Icons.close, color: Colors.white),
-                            onPressed: () => Navigator.pop(context),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
-                child: Video(
-                  controller: controller,
-                  controls: AdaptiveVideoControls,
-                  subtitleViewConfiguration: SubtitleViewConfiguration(
-                    style: TextStyle(fontSize: subtitleFontSize),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
+                              );
+                            },
+                          );
+                        },
+                      ),
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const DownloadsPage()),
+          );
+        },
+        child: const Icon(Icons.download),
       ),
     );
   }
 
   @override
   void dispose() {
-    player.dispose();
+    // Belleği temizle
+    imageCache.clear();
+    imageCache.clearLiveImages();
+    _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  // Yeni metod: Viewport dışındaki görüntüleri temizle
+  void _cleanupImages() {
+    final RenderBox? renderBox = context.findRenderObject() as RenderBox?;
+    if (renderBox == null) return;
+
+    final viewport = renderBox.paintBounds;
+    final firstVisible = (_scrollController.position.pixels / 200).floor();
+    final lastVisible = ((_scrollController.position.pixels + viewport.height) / 200).ceil();
+
+    // Viewport dışındaki görüntüleri önbellekten temizle
+    for (var i = 0; i < _filteredMovies.length; i++) {
+      if (i < firstVisible - 20 || i > lastVisible + 20) {
+        final movie = _filteredMovies[i];
+        imageCache.evict(NetworkImage(movie.posterPath));
+      }
+    }
+  }
+
+  Future<void> _handleDownload(String videoUrl, String title) async {
+    try {
+      final saveLocation = await FilePicker.platform.saveFile(
+        dialogTitle: 'Kayıt Konumu Seç',
+        fileName: '$title.mkv',
+      );
+
+      if (saveLocation != null && mounted) {
+        // İndirmeyi başlat
+        DownloadManager().startDownload(videoUrl, title, saveLocation);
+        
+        // Ana sayfaya dön ve downloads sayfasına git
+        if (!mounted) return;
+        
+        // Navigator.pop yerine replacementları kullan
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) => const DownloadsPage(),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Download error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('İndirme başlatılırken bir hata oluştu')),
+        );
+      }
+    }
   }
 }
 
-class DownloadDialog extends StatefulWidget {
+class DownloadDialog extends StatelessWidget {
   final String url;
   final String fileName;
 
@@ -1116,311 +974,51 @@ class DownloadDialog extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  State<DownloadDialog> createState() => _DownloadDialogState();
-}
-
-class _DownloadDialogState extends State<DownloadDialog> {
-  double _progress = 0;
-  String _status = 'Hazırlanıyor...';
-  String _speed = '0 KB/s';
-  String _downloadedSize = '0 MB';
-  String _totalSize = '0 MB';
-  bool _isDownloading = false;
-  bool _isCancelled = false;
-  HttpClient? _client;
-  DateTime? _startTime;
-  Timer? _speedTimer;
-  int _lastReceivedBytes = 0;
-  String? _saveLocation;
-  static const int bufferSize = 256 * 1024; // 64 KB buffer
-  final Dio _dio = Dio();
-  final int _chunkSize = 2 * 1024 * 1024; // 2MB chunks
-  CancelToken? _cancelToken;
-
-  @override
-  void initState() {
-    super.initState();
-    _startDownload();
-  }
-
-  @override
-  void dispose() {
-    _speedTimer?.cancel();
-    _client?.close();
-    // İptal edilmişse dosyayı sil
-    if (_isCancelled && _saveLocation != null) {
-      File(_saveLocation!).deleteSync();
-    }
-    super.dispose();
-  }
-
-  Future<void> _startDownload() async {
-    try {
-      final fileName = _sanitizeFilename(widget.fileName);
-      final fileExt = _detectFileExtension(widget.url);
-      final fullFileName = '$fileName.$fileExt';
-
-      _saveLocation = await FilePicker.platform.saveFile(
-        dialogTitle: 'Kayıt Konumu Seç',
-        fileName: fullFileName,
-        type: FileType.custom,
-        allowedExtensions: [fileExt],
-      );
-
-      if (_saveLocation == null || !mounted) {
-        Navigator.pop(context);
-        return;
-      }
-
-      setState(() {
-        _isDownloading = true;
-        _status = 'İndirme başlatılıyor...';
-      });
-
-      _cancelToken = CancelToken();
-      _startTime = DateTime.now();
-      var lastUpdateTime = DateTime.now();
-      var lastBytes = 0;
-
-      // Hız hesaplama timer'ı
-      _speedTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) {
-        final duration = DateTime.now().difference(lastUpdateTime);
-        if (duration.inSeconds > 0) {
-          final speed = (_lastReceivedBytes - lastBytes) / duration.inSeconds;
-          if (mounted && speed > 0) {
-            setState(() => _speed = _formatSpeed(speed));
-            lastBytes = _lastReceivedBytes;
-            lastUpdateTime = DateTime.now();
-          }
-        }
-      });
-
-      // Optimize edilmiş dio ayarları
-      _dio.options = BaseOptions(
-        headers: {
-          'User-Agent': 'Mozilla/5.0',
-          'Accept': '*/*',
-          'Connection': 'keep-alive',
-        },
-        responseType: ResponseType.stream,
-        followRedirects: true,
-        validateStatus: (status) => status! < 500,
-        receiveTimeout: const Duration(minutes: 30),
-        sendTimeout: const Duration(minutes: 30),
-        connectTimeout: const Duration(seconds: 30),
-        receiveDataWhenStatusError: true,
-        maxRedirects: 5,
-      );
-
-      final response = await _dio.get(
-        widget.url,
-        cancelToken: _cancelToken,
-        options: Options(
-          responseType: ResponseType.stream,
-        ),
-        onReceiveProgress: (received, total) {
-          if (total != -1 && mounted && !_isCancelled) {
-            setState(() {
-              _progress = received / total;
-              _lastReceivedBytes = received;
-              _downloadedSize = _formatSize(received);
-              _totalSize = _formatSize(total);
-              _status = 'İndiriliyor... ${(_progress * 100).toStringAsFixed(1)}%';
-            });
-          }
-        },
-      );
-
-      final file = File(_saveLocation!);
-      final sink = file.openWrite();
-
-      int received = 0;
-      int total = -1;
-
-      try {
-        final contentLength = response.headers.value('content-length');
-        if (contentLength != null) {
-          total = int.tryParse(contentLength) ?? -1;
-        }
-
-        await for (final chunk in response.data.stream) {
-          if (_isCancelled) break;
-          
-          sink.add(chunk); // sync write
-          received += (chunk.length as num).toInt();
-
-          if (mounted && !_isCancelled) {
-            setState(() {
-              if (total > 0) {
-                _progress = received / total;
-                _lastReceivedBytes = received;
-                _downloadedSize = _formatSize(received);
-                _totalSize = _formatSize(total);
-                _status = 'İndiriliyor... ${(_progress * 100).toStringAsFixed(1)}%';
-              } else {
-                _downloadedSize = _formatSize(received);
-                _status = 'İndiriliyor... $_downloadedSize';
-              }
-            });
-          }
-        }
-
-        await sink.flush();
-      } finally {
-        await sink.close();
-      }
-
-      _speedTimer?.cancel();
-
-      if (_isCancelled) {
-        await file.delete();
-        if (mounted) Navigator.pop(context);
-        return;
-      }
-
-      if (mounted) {
-        setState(() {
-          _status = 'İndirme tamamlandı';
-          _isDownloading = false;
-        });
-        await Future.delayed(const Duration(milliseconds: 500));
-        Navigator.pop(context, true);
-      }
-    } catch (e) {
-      _speedTimer?.cancel();
-      if (!_isCancelled && mounted) {
-        setState(() {
-          _status = 'Hata: ${e.toString()}';
-          _isDownloading = false;
-        });
-      }
-    }
-  }
-
-  void _cancelDownload() {
-    _isCancelled = true;
-    _cancelToken?.cancel();
-    _dio.close(force: true);
-    Navigator.pop(context);
-  }
-
-  String _sanitizeFilename(String name) {
-    // Dosya adından geçersiz karakterleri temizle
-    name = name.replaceAll(RegExp(r'[<>:"/\\|?*]'), '');
-    // Çift uzantıları temizle
-    if (name.toLowerCase().endsWith('.mp4.mkv')) {
-      name = name.substring(0, name.length - 4);
-    }
-    return name;
-  }
-
-  String _detectFileExtension(String url) {
-    try {
-      // Content-Type'a göre uzantı belirleme için HEAD request
-      final uri = Uri.parse(url);
-      final extensionFromPath = uri.path.split('.').last.toLowerCase();
-      
-      if (['mp4', 'mkv', 'avi', 'mov', 'webm'].contains(extensionFromPath)) {
-        return extensionFromPath;
-      }
-      return 'mp4';
-    } catch (_) {
-      return 'mp4';
-    }
-  }
-
-  String _formatSpeed(double bytesPerSecond) {
-    if (bytesPerSecond < 1024) {
-      return '${bytesPerSecond.toStringAsFixed(1)} B/s';
-    } else if (bytesPerSecond < 1024 * 1024) {
-      return '${(bytesPerSecond / 1024).toStringAsFixed(1)} KB/s';
-    } else if (bytesPerSecond < 1024 * 1024 * 1024) {
-      return '${(bytesPerSecond / (1024 * 1024)).toStringAsFixed(1)} MB/s';
-    } else {
-      return '${(bytesPerSecond / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB/s';
-    }
-  }
-
-  String _formatSize(int bytes) {
-    const suffixes = ['B', 'KB', 'MB', 'GB', 'TB'];
-    var i = 0;
-    double size = bytes.toDouble();
-    
-    while (size > 1024 && i < suffixes.length - 1) {
-      size /= 1024;
-      i++;
-    }
-    
-    return '${size.toStringAsFixed(1)} ${suffixes[i]}';
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.black87,
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        width: 400,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    widget.fileName,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                if (_isDownloading)
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white70),
-                    tooltip: 'İndirmeyi İptal Et',
-                    onPressed: _cancelDownload,
-                  )
-                else
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            if (_isDownloading) ...[
-              LinearProgressIndicator(
-                value: _progress,
-                backgroundColor: Colors.grey[800],
-                valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    '$_downloadedSize / $_totalSize',
-                    style: const TextStyle(color: Colors.white70),
-                  ),
-                  Text(
-                    _speed,
-                    style: const TextStyle(color: Colors.white70),
-                  ),
-                ],
-              ),
-            ],
-            const SizedBox(height: 10),
-            Text(
-              _status,
-              style: const TextStyle(color: Colors.white),
-              textAlign: TextAlign.center,
-            ),
-          ],
+    return AlertDialog(
+      title: const Text('İndirme Konumunu Seç'),
+      content: const Text('Dosyayı indirmek istediğiniz konumu seçin.'),
+      actions: [
+        TextButton(
+          child: const Text('İptal'),
+          onPressed: () => Navigator.pop(context),
         ),
-      ),
+        TextButton(
+          child: const Text('Seç'),
+          onPressed: () async {
+            String downloadUrl = url;
+            if (MediafireExtractor.isMediafireUrl(url)) {
+              final directUrl = await MediafireExtractor.extractDirectUrl(url);
+              if (directUrl != null) {
+                downloadUrl = directUrl;
+              } else {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Mediafire linkinden indirme linki alınamadı')),
+                  );
+                  Navigator.pop(context);
+                  return;
+                }
+              }
+            }
+
+            final saveLocation = await FilePicker.platform.saveFile(
+              dialogTitle: 'Kayıt Konumu Seç',
+              fileName: '$fileName.mkv',
+            );
+
+            if (saveLocation != null && context.mounted) {
+              DownloadManager().startDownload(downloadUrl, fileName, saveLocation);
+              Navigator.pop(context);
+              
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const DownloadsPage()),
+              );
+            }
+          },
+        ),
+      ],
     );
   }
 }

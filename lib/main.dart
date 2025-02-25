@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'pages/sinewix_film_page.dart';
 import 'pages/sinewix_dizi_page.dart';
 import 'pages/sinewix_anime_page.dart';
-import 'pages/hdfilmcehennemi_page.dart';
 import 'package:media_kit/media_kit.dart';
 
 void main() {
@@ -48,75 +47,122 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0;
-  bool _isExtended = true;
 
   final List<Widget> _pages = const [
     SinewixFilmPage(),
     SinewixDiziPage(),
     SinewixAnimePage(),
-    HDFilmCehennemiFilmPage(), // Sınıf adı düzeltildi
   ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Row(
+      body: Column(
         children: [
-          NavigationRail(
-            extended: _isExtended,
-            backgroundColor: Theme.of(context).colorScheme.surface,
-            selectedIndex: _selectedIndex,
-            onDestinationSelected: (int index) {
-              setState(() {
-                _selectedIndex = index;
-              });
-            },
-            leading: IconButton(
-              icon: AnimatedCrossFade(
-                firstChild: const Icon(Icons.menu_rounded),
-                secondChild: const Icon(Icons.menu_rounded),
-                crossFadeState: _isExtended 
-                    ? CrossFadeState.showFirst 
-                    : CrossFadeState.showSecond,
-                duration: const Duration(milliseconds: 300),
+          Container(
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface.withOpacity(0.8),
+              borderRadius: const BorderRadius.only(
+                bottomLeft: Radius.circular(24),
+                bottomRight: Radius.circular(24),
               ),
-              onPressed: () {
-                setState(() {
-                  _isExtended = !_isExtended;
-                });
-              },
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 20,
+                ),
+              ],
             ),
-            destinations: const [
-              NavigationRailDestination(
-                icon: Icon(Icons.movie),
-                selectedIcon: Icon(Icons.movie),
-                label: Text('Sinewix Film'),
+            margin: const EdgeInsets.all(12),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: SafeArea(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.start,
+                children: [
+                  Text(
+                    'Sinewix',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 32),
+                  ...List.generate(
+                    _pages.length,
+                    (index) => _buildTabItem(
+                      index: index,
+                      title: ['Film', 'Dizi', 'Anime'][index],
+                      icon: [Icons.movie_outlined, Icons.tv_outlined, Icons.animation_outlined][index],
+                    ),
+                  ),
+                ],
               ),
-              NavigationRailDestination(
-                icon: Icon(Icons.movie),
-                selectedIcon: Icon(Icons.movie),
-                label: Text('Sinewix Dizi'),
-              ),
-              NavigationRailDestination(
-                icon: Icon(Icons.movie),
-                selectedIcon: Icon(Icons.movie),
-                label: Text('Sinewix Anime'),
-              ),
-              NavigationRailDestination(
-                icon: Icon(Icons.movie),
-                selectedIcon: Icon(Icons.movie),
-                label: Text('HD Film Cehennemi'),
-              ),
-            ],
+            ),
           ),
-          const VerticalDivider(thickness: 1, width: 1),
           Expanded(
             child: Container(
-              color: Theme.of(context).colorScheme.surface,
-              child: _pages[_selectedIndex],
+              margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: _pages[_selectedIndex],
+              ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTabItem({
+    required int index,
+    required String title,
+    required IconData icon,
+  }) {
+    final isSelected = _selectedIndex == index;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: () => setState(() => _selectedIndex = index),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: isSelected 
+                  ? Theme.of(context).colorScheme.primaryContainer
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 20,
+                  color: isSelected
+                      ? Theme.of(context).colorScheme.primary
+                      : Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: isSelected
+                        ? Theme.of(context).colorScheme.primary
+                        : Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

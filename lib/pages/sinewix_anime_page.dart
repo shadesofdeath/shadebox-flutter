@@ -3,12 +3,16 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'dart:async';
 import 'package:http/http.dart' as http;
+import 'package:shadebox/utils/mediafire_extractor.dart';
 import 'package:video_player/video_player.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:shadebox/pages/download_manager.dart';
+import 'package:shadebox/pages/downloads_page.dart';
+import 'package:shadebox/widgets/video_player_dialog.dart';
 
 // TV Show model
 class TVShow {
@@ -306,6 +310,10 @@ class _SinewixAnimePageState extends State<SinewixAnimePage> {
             Uri.parse('$_mainUrl/sinewix/animes/2'),
             headers: {'Accept-Charset': 'utf-8'},
           ),
+          http.get(
+            Uri.parse('$_mainUrl/sinewix/animes/3'),
+            headers: {'Accept-Charset': 'utf-8'},
+          ),
         ];
 
         final responses = await Future.wait(futures);
@@ -324,7 +332,7 @@ class _SinewixAnimePageState extends State<SinewixAnimePage> {
           _shows = allShows;
           _filteredShows = allShows;
           _isLoading = false;
-          _currentPage = 2;
+          _currentPage = 3;
         });
       } else {
         final response = await http.get(
@@ -771,15 +779,22 @@ class _SinewixAnimePageState extends State<SinewixAnimePage> {
                                                           icon: const Icon(Icons.download),
                                                           onPressed: () async {
                                                             // İndirme dialog'ını göster
-                                                            final result = await showDialog<bool>(
-                                                              context: context,
-                                                              barrierDismissible: false,
-                                                              builder: (context) => DownloadDialog(
-                                                                url: episode.videos.first.link, // API'den gelen link
-                                                                fileName:
-                                                                    '${tvShowDetail.title} - ${season.name} - ${episode.episodeNumber}. Bölüm',
-                                                              ),
+                                                            final saveLocation = await FilePicker.platform.saveFile(
+                                                              dialogTitle: 'Kayıt Konumu Seç',
+                                                              fileName: '${tvShowDetail.title} - ${season.name} - ${episode.episodeNumber}. Bölüm.mp4',
                                                             );
+
+                                                            if (saveLocation != null && context.mounted) {
+                                                              DownloadManager().startDownload(
+                                                                episode.videos.first.link,
+                                                                '${tvShowDetail.title} - ${season.name} - ${episode.episodeNumber}. Bölüm', 
+                                                                saveLocation
+                                                              );
+                                                              Navigator.push(
+                                                                context,
+                                                                MaterialPageRoute(builder: (context) => const DownloadsPage()),
+                                                              );
+                                                            }
                                                           },
                                                         ),
                                                     ],
@@ -817,142 +832,153 @@ class _SinewixAnimePageState extends State<SinewixAnimePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: TextField(
-            controller: _searchController,
-            onChanged: (query) {
-              if (query.length >= 3) {
-                _searchShows(query);
-              } else if (query.isEmpty) {
-                setState(() => _filteredShows = _shows);
-              }
-            },
-            decoration: InputDecoration(
-              hintText: 'Anime Ara... (En az 3 karakter)',
-              prefixIcon: const Icon(Icons.search),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
+    return Scaffold( // Column yerine Scaffold kullanıyoruz
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: TextField(
+              controller: _searchController,
+              onChanged: (query) {
+                if (query.length >= 3) {
+                  _searchShows(query);
+                } else if (query.isEmpty) {
+                  setState(() => _filteredShows = _shows);
+                }
+              },
+              decoration: InputDecoration(
+                hintText: 'Anime Ara... (En az 3 karakter)',
+                prefixIcon: const Icon(Icons.search),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                filled: true,
+                fillColor: Theme.of(context).colorScheme.surface,
               ),
-              filled: true,
-              fillColor: Theme.of(context).colorScheme.surface,
             ),
           ),
-        ),
-        Expanded(
-          child: _isLoading && _shows.isEmpty
-              ? const Center(child: CircularProgressIndicator())
-              : _filteredShows.isEmpty
-                  ? const Center(child: Text('Anime bulunamadı'))
-                  : GridView.builder(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.all(12),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 8,
-                        childAspectRatio: 0.65,
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing: 16,
-                      ),
-                      itemCount: _filteredShows.length + (_isLoadingMore ? 1 : 0),
-                      itemBuilder: (context, index) {
-                        if (index == _filteredShows.length) {
-                          return const Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(8.0),
-                              child: CircularProgressIndicator(),
+          Expanded(
+            child: _isLoading && _shows.isEmpty
+                ? const Center(child: CircularProgressIndicator())
+                : _filteredShows.isEmpty
+                    ? const Center(child: Text('Anime bulunamadı'))
+                    : GridView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.all(12),
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 8,
+                          childAspectRatio: 0.65,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 16,
+                        ),
+                        itemCount: _filteredShows.length + (_isLoadingMore ? 1 : 0),
+                        itemBuilder: (context, index) {
+                          if (index == _filteredShows.length) {
+                            return const Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(8.0),
+                                child: CircularProgressIndicator(),
+                              ),
+                            );
+                          }
+                          final show = _filteredShows[index];
+                          return Card(
+                            elevation: 0,
+                            color: Theme.of(context).colorScheme.surface,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              side: BorderSide(
+                                color: Theme.of(context).colorScheme.outline.withOpacity(0.1),
+                                width: 1,
+                              ),
+                            ),
+                            child: InkWell(
+                              onTap: () => _showTVDetails(show),
+                              borderRadius: BorderRadius.circular(8),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Expanded(
+                                    child: Stack(
+                                      fit: StackFit.expand,
+                                      children: [
+                                        ClipRRect(
+                                          borderRadius: const BorderRadius.vertical(
+                                            top: Radius.circular(8),
+                                          ),
+                                          child: Image.network(
+                                            show.posterPath,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (context, error, stackTrace) =>
+                                                const Icon(Icons.error, size: 20),
+                                          ),
+                                        ),
+                                        Positioned(
+                                          top: 8,
+                                          right: 8,
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 6,
+                                              vertical: 2,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: Theme.of(context).colorScheme.surface.withOpacity(0.8),
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                const Icon(
+                                                  Icons.star_rounded,
+                                                  size: 14,
+                                                  color: Colors.amber,
+                                                ),
+                                                const SizedBox(width: 2),
+                                                Text(
+                                                  show.voteAverage.toStringAsFixed(1),
+                                                  style: const TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.all(8.0),
+                                    child: Text(
+                                      show.title,
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           );
-                        }
-                        final show = _filteredShows[index];
-                        return Card(
-                          elevation: 0,
-                          color: Theme.of(context).colorScheme.surface,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            side: BorderSide(
-                              color: Theme.of(context).colorScheme.outline.withOpacity(0.1),
-                              width: 1,
-                            ),
-                          ),
-                          child: InkWell(
-                            onTap: () => _showTVDetails(show),
-                            borderRadius: BorderRadius.circular(8),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Expanded(
-                                  child: Stack(
-                                    fit: StackFit.expand,
-                                    children: [
-                                      ClipRRect(
-                                        borderRadius: const BorderRadius.vertical(
-                                          top: Radius.circular(8),
-                                        ),
-                                        child: Image.network(
-                                          show.posterPath,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (context, error, stackTrace) =>
-                                              const Icon(Icons.error, size: 20),
-                                        ),
-                                      ),
-                                      Positioned(
-                                        top: 8,
-                                        right: 8,
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 6,
-                                            vertical: 2,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: Theme.of(context).colorScheme.surface.withOpacity(0.8),
-                                            borderRadius: BorderRadius.circular(4),
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              const Icon(
-                                                Icons.star_rounded,
-                                                size: 14,
-                                                color: Colors.amber,
-                                              ),
-                                              const SizedBox(width: 2),
-                                              Text(
-                                                show.voteAverage.toStringAsFixed(1),
-                                                style: const TextStyle(
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.w500,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.all(8.0),
-                                  child: Text(
-                                    show.title,
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    textAlign: TextAlign.center,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-        ),
-      ],
+                        },
+                      ),
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const DownloadsPage()),
+          );
+        },
+        child: const Icon(Icons.download),
+      ),
     );
   }
 
@@ -965,261 +991,6 @@ class _SinewixAnimePageState extends State<SinewixAnimePage> {
 }
 
 // VideoPlayerDialog ve DownloadDialog sınıfları film sayfasıyla aynı
-class VideoPlayerDialog extends StatefulWidget {
-  final String videoUrl;
-  final String title;
-
-  const VideoPlayerDialog({
-    Key? key,
-    required this.videoUrl,
-    required this.title,
-  }) : super(key: key);
-
-  @override
-  State<VideoPlayerDialog> createState() => _VideoPlayerDialogState();
-}
-
-class _VideoPlayerDialogState extends State<VideoPlayerDialog> {
-  late final player = Player();
-  late final controller = VideoController(player);
-  double subtitleFontSize = 32.0;
-
-  @override
-  void initState() {
-    super.initState();
-    _initializePlayer();
-  }
-
-  Future<void> _initializePlayer() async {
-    try {
-      await player.open(Media(widget.videoUrl));
-    } catch (e) {
-      debugPrint('Video yüklenirken hata: $e');
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: EdgeInsets.zero,
-      child: Container(
-        width: MediaQuery.of(context).size.width * 0.8,
-        height: MediaQuery.of(context).size.height * 0.8,
-        decoration: BoxDecoration(
-          color: Colors.black,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: const BoxDecoration(
-                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      widget.title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  StreamBuilder(
-                    stream: player.stream.tracks,
-                    builder: (context, snapshot) {
-                      final audioTracks = player.state.tracks.audio;
-                      final subtitleTracks = player.state.tracks.subtitle;
-                      final videoTracks = player.state.tracks.video;
-
-                      return Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (audioTracks.isNotEmpty)
-                            PopupMenuButton<AudioTrack>(
-                              icon: const Icon(Icons.audiotrack, color: Colors.white),
-                              tooltip: 'Ses & Dublaj',
-                              position: PopupMenuPosition.under,
-                              itemBuilder: (context) => [
-                                for (var track in audioTracks)
-                                  PopupMenuItem(
-                                    value: track,
-                                    child: Row(
-                                      children: [
-                                        Icon(
-                                          track == player.state.track.audio
-                                              ? Icons.radio_button_checked
-                                              : Icons.radio_button_unchecked,
-                                          size: 18,
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Text(
-                                            track.title ?? 'Ses ${track.id}',
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                              ],
-                              onSelected: player.setAudioTrack,
-                            ),
-
-                          if (subtitleTracks.isNotEmpty) ...[
-                            const SizedBox(width: 8),
-                            PopupMenuButton<SubtitleTrack>(
-                              icon: const Icon(Icons.subtitles, color: Colors.white),
-                              tooltip: 'Altyazı',
-                              position: PopupMenuPosition.under,
-                              itemBuilder: (context) => [
-                                PopupMenuItem(
-                                  value: SubtitleTrack.no(),
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        player.state.track.subtitle == null
-                                            ? Icons.radio_button_checked
-                                            : Icons.radio_button_unchecked,
-                                        size: 18,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      const Text('Kapalı'),
-                                    ],
-                                  ),
-                                ),
-                                for (var track in subtitleTracks)
-                                  PopupMenuItem(
-                                    value: track,
-                                    child: Row(
-                                      children: [
-                                        Icon(
-                                          track == player.state.track.subtitle
-                                              ? Icons.radio_button_checked
-                                              : Icons.radio_button_unchecked,
-                                          size: 18,
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Text(
-                                            track.title ?? 'Altyazı ${track.id}',
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                              ],
-                              onSelected: player.setSubtitleTrack,
-                            ),
-
-                            PopupMenuButton<void>(
-                              icon: const Icon(Icons.text_fields, color: Colors.white),
-                              tooltip: 'Altyazı Boyutu',
-                              position: PopupMenuPosition.under,
-                              itemBuilder: (context) => <PopupMenuEntry<void>>[
-                                PopupMenuItem<void>(
-                                  enabled: false,
-                                  height: 48,
-                                  child: StatefulBuilder(
-                                    builder: (context, setMenuState) => SizedBox(
-                                      width: 200,
-                                      child: Slider(
-                                        value: subtitleFontSize,
-                                        min: 32,
-                                        max: 140,
-                                        divisions: 10,
-                                        label: '${(subtitleFontSize / 32).round()}x',
-                                        onChanged: (value) {
-                                          setMenuState(() {
-                                            setState(() {
-                                              subtitleFontSize = value;
-                                            });
-                                          });
-                                        },
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-
-                          if (videoTracks.isNotEmpty) ...[
-                            const SizedBox(width: 8),
-                            PopupMenuButton<VideoTrack>(
-                              icon: const Icon(Icons.hd, color: Colors.white),
-                              tooltip: 'Video Kalitesi',
-                              position: PopupMenuPosition.under,
-                              itemBuilder: (context) => [
-                                for (var track in videoTracks)
-                                  PopupMenuItem(
-                                    value: track,
-                                    child: Row(
-                                      children: [
-                                        Icon(
-                                          track == player.state.track.video
-                                              ? Icons.radio_button_checked
-                                              : Icons.radio_button_unchecked,
-                                          size: 18,
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Text(
-                                            track.title ?? 'Video ${track.id}',
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                              ],
-                              onSelected: player.setVideoTrack,
-                            ),
-                          ],
-
-                          const SizedBox(width: 8),
-                          IconButton(
-                            icon: const Icon(Icons.close, color: Colors.white),
-                            onPressed: () => Navigator.pop(context),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
-                child: Video(
-                  controller: controller,
-                  controls: AdaptiveVideoControls,
-                  subtitleViewConfiguration: SubtitleViewConfiguration(
-                    style: TextStyle(fontSize: subtitleFontSize),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  @override
-  void dispose() {
-    player.dispose();
-    super.dispose();
-  }
-}
-
 class DownloadDialog extends StatefulWidget {
   final String url;
   final String fileName;
@@ -1248,6 +1019,7 @@ class _DownloadDialogState extends State<DownloadDialog> {
   final Dio _dio = Dio();
   CancelToken? _cancelToken;
   DateTime? _startTime; // Add this line
+  int _totalSizeInBytes = 0; // Add this field
 
   @override
   void initState() {
@@ -1400,9 +1172,32 @@ class _DownloadDialogState extends State<DownloadDialog> {
   }
 
   String _sanitizeFilename(String name) {
+    // Windows'ta yasaklı karakterleri temizle
     name = name.replaceAll(RegExp(r'[<>:"/\\|?*]'), '');
-    if (name.toLowerCase().endsWith('.mp4.mkv')) {
-      name = name.substring(0, name.length - 4);
+    // Noktaları ve boşlukları güvenli karakterlerle değiştir
+    name = name.replaceAll('.', '_');
+    name = name.trim().replaceAll(RegExp(r'\s+'), '_');
+    // Özel Türkçe karakterleri dönüştür
+    name = name
+        .replaceAll('ğ', 'g')
+        .replaceAll('Ğ', 'G')
+        .replaceAll('ü', 'u')
+        .replaceAll('Ü', 'U')
+        .replaceAll('ş', 's')
+        .replaceAll('Ş', 'S')
+        .replaceAll('ı', 'i')
+        .replaceAll('İ', 'I')
+        .replaceAll('ö', 'o')
+        .replaceAll('Ö', 'O')
+        .replaceAll('ç', 'c')
+        .replaceAll('Ç', 'C');
+    // Dosya adı uzunluğunu sınırla
+    if (name.length > 200) {
+      name = name.substring(0, 200);
+    }
+    // Dosya adı boşsa varsayılan ad ver
+    if (name.isEmpty) {
+      name = 'video';
     }
     return name;
   }
