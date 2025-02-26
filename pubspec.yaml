@@ -46,6 +46,7 @@ dependencies:
   flex_color_scheme: ^8.1.1
   google_fonts: ^6.2.1
   hugeicons: ^0.0.7
+  window_manager: ^0.4.3 
 
 flutter_launcher_icons:
   image_path: "assets/app_icon.png"

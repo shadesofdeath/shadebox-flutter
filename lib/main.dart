@@ -1,3 +1,5 @@
+import 'dart:ui' show PlatformDispatcher;
+import 'package:ShadeBox/pages/sinewix_tv_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flex_color_scheme/flex_color_scheme.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -8,9 +10,31 @@ import 'pages/sinewix_dizi_page.dart';
 import 'pages/sinewix_anime_page.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:flutter/services.dart';
+import 'dart:io';
+import 'package:window_manager/window_manager.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
+  
+  // Pencereyi ortala
+  if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+    await windowManager.ensureInitialized();
+    
+    WindowOptions windowOptions = WindowOptions(
+      size: Size(1280, 720),
+      minimumSize: Size(1280, 720),
+      maximumSize: Size(1920, 1080),
+      center: true,
+      title: 'ShadeBox',
+    );
+    
+    await windowManager.waitUntilReadyToShow(windowOptions, () async {
+      await windowManager.show();
+      await windowManager.focus();
+    });
+  }
+  
   runApp(const MyApp());
 }
 
@@ -51,7 +75,6 @@ class _MyAppState extends State<MyApp> {
         (context != null ? Theme.of(context).brightness == Brightness.dark : false));
         
     SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
       statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
       statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
     ));
@@ -140,6 +163,7 @@ class _HomePageState extends State<HomePage> {
     SinewixFilmPage(),
     SinewixDiziPage(),
     SinewixAnimePage(),
+    SinewixTVPage(),
   ];
 
   @override
@@ -179,8 +203,13 @@ class _HomePageState extends State<HomePage> {
                         _pages.length,
                         (index) => _buildTabItem(
                           index: index,
-                          title: ['Film', 'Dizi', 'Anime'][index],
-                          icon: [HugeIcons.strokeRoundedVideo01, HugeIcons.strokeRoundedVideo02, HugeIcons.strokeRoundedVideo01][index],
+                          title: ['Film', 'Dizi', 'Anime', 'Canlı TV'][index], // TV sekmesini ekleyin
+                          icon: [
+                            HugeIcons.strokeRoundedVideo01, 
+                            HugeIcons.strokeRoundedVideoReplay,
+                            HugeIcons.strokeRoundedTongue,
+                            HugeIcons.strokeRoundedTv01 // TV ikonu ekleyin
+                          ][index],
                         ),
                       ),
                     ],
@@ -277,7 +306,7 @@ class _HomePageState extends State<HomePage> {
                   size: 20,
                   color: isSelected
                       ? Theme.of(context).colorScheme.primary
-                      : Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                      : Theme.of(context).colorScheme.onSurface.withOpacity(0.9),
                 ),
                 const SizedBox(width: 8),
                 Text(
@@ -285,7 +314,7 @@ class _HomePageState extends State<HomePage> {
                   style: TextStyle(
                     color: isSelected
                         ? Theme.of(context).colorScheme.primary
-                        : Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                        : Theme.of(context).colorScheme.onSurface.withOpacity(0.9),
                     fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                   ),
                 ),

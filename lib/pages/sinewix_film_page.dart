@@ -899,7 +899,7 @@ class _SinewixFilmPageState extends State<SinewixFilmPage> {
             MaterialPageRoute(builder: (context) => const DownloadsPage()),
           );
         },
-        child: const Icon(Icons.download),
+        child: const Icon(HugeIcons.strokeRoundedDownload05),
       ),
     );
   }

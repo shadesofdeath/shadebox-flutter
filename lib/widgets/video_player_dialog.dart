@@ -10,11 +10,17 @@ import 'package:crypto/crypto.dart';
 class VideoPlayerDialog extends StatefulWidget {
   final String videoUrl;
   final String title;
+  final bool isLiveStream; // Yeni parametre ekleyelim
+  final String? userAgent;    // Yeni eklenen
+  final String? referer;      // Yeni eklenen
 
   const VideoPlayerDialog({
     Key? key,
     required this.videoUrl,
     required this.title,
+    this.isLiveStream = false, // Varsayılan olarak false
+    this.userAgent,           // Yeni eklenen
+    this.referer,            // Yeni eklenen
   }) : super(key: key);
 
   @override
@@ -55,6 +61,12 @@ class _VideoPlayerDialogState extends State<VideoPlayerDialog> {
   }
 
   Future<void> _checkLastPosition() async {
+    // Canlı yayın ise pozisyon kontrolü yapma
+    if (widget.isLiveStream) {
+      _initializePlayer();
+      return;
+    }
+
     final prefs = await SharedPreferences.getInstance();
     final String? videoPositions = prefs.getString('videoPositions');
     final String videoId = _generateVideoId(widget.title);
@@ -129,8 +141,22 @@ class _VideoPlayerDialogState extends State<VideoPlayerDialog> {
         }
       }
 
-      // Önce videoyu aç
-      await player.open(Media(videoUrl));
+      // HTTP başlıklarını ayarla
+      final headers = <String, String>{};
+      if (widget.userAgent != null) {
+        headers['User-Agent'] = widget.userAgent!;
+      }
+      if (widget.referer != null) {
+        headers['Referer'] = widget.referer!;
+      }
+
+      // Videoyu özel başlıklarla aç
+      await player.open(
+        Media(
+          videoUrl,
+          httpHeaders: headers,
+        ),
+      );
       
       // Video hazır olana kadar bekle
       await Future.wait([
@@ -406,7 +432,10 @@ class _VideoPlayerDialogState extends State<VideoPlayerDialog> {
 
   @override
   void dispose() {
-    _saveVideoPosition(); // Video pozisyonunu kaydet
+    // Canlı yayın ise pozisyon kaydetme
+    if (!widget.isLiveStream) {
+      _saveVideoPosition();
+    }
     _hideTimer?.cancel(); // Timer'ı temizle
     player.dispose();
     super.dispose();
