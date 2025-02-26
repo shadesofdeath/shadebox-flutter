@@ -1,18 +1,14 @@
-import 'dart:typed_data';
+import 'package:ShadeBox/pages/download_manager.dart';
+import 'package:ShadeBox/pages/downloads_page.dart';
+import 'package:ShadeBox/widgets/video_player_dialog.dart';
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'dart:async';
 import 'package:http/http.dart' as http;
-import 'package:shadebox/utils/mediafire_extractor.dart';
-import 'package:video_player/video_player.dart';
-import 'package:media_kit/media_kit.dart';
-import 'package:media_kit_video/media_kit_video.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 import 'package:dio/dio.dart';
-import 'package:shadebox/pages/download_manager.dart';
-import 'package:shadebox/pages/downloads_page.dart';
-import 'package:shadebox/widgets/video_player_dialog.dart';
+import 'package:hugeicons/hugeicons.dart';
 
 // TV Show model
 class TVShow {
@@ -444,7 +440,7 @@ class _SinewixAnimePageState extends State<SinewixAnimePage> {
                                               color: Colors.grey[900],
                                               child: const Center(
                                                 child: Icon(
-                                                  Icons.image_not_supported,
+                                                  HugeIcons.strokeRoundedImageNotFound01,
                                                   size: 50,
                                                   color: Colors.grey,
                                                 ),
@@ -455,7 +451,7 @@ class _SinewixAnimePageState extends State<SinewixAnimePage> {
                                             color: Colors.grey[900],
                                             child: const Center(
                                               child: Icon(
-                                                Icons.image_not_supported,
+                                                HugeIcons.strokeRoundedImageNotFound01,
                                                 size: 50,
                                                 color: Colors.grey,
                                               ),
@@ -503,7 +499,7 @@ class _SinewixAnimePageState extends State<SinewixAnimePage> {
                                               ),
                                               child: Row(
                                                 children: [
-                                                  const Icon(Icons.star, size: 16),
+                                                  const Icon(HugeIcons.strokeRoundedStar, size: 16),
                                                   const SizedBox(width: 4),
                                                   Text(
                                                     tvShowDetail.voteAverage.toStringAsFixed(1),
@@ -627,7 +623,7 @@ class _SinewixAnimePageState extends State<SinewixAnimePage> {
                                                           ? NetworkImage(cast.profilePath!)
                                                           : null,
                                                       child: cast.profilePath == null
-                                                          ? const Icon(Icons.person, size: 40)
+                                                          ? const Icon(HugeIcons.strokeRoundedUser, size: 40)
                                                           : null,
                                                     ),
                                                   ),
@@ -695,7 +691,7 @@ class _SinewixAnimePageState extends State<SinewixAnimePage> {
                                                   height: 90,
                                                   color: Colors.grey[900],
                                                   child: const Icon(
-                                                    Icons.image_not_supported,
+                                                    HugeIcons.strokeRoundedImageNotFound01,
                                                     color: Colors.grey,
                                                   ),
                                                 ),
@@ -727,7 +723,7 @@ class _SinewixAnimePageState extends State<SinewixAnimePage> {
                                                               height: 60,
                                                               color: Colors.grey[900],
                                                               child: const Icon(
-                                                                Icons.image_not_supported,
+                                                                HugeIcons.strokeRoundedImageNotFound01,
                                                                 color: Colors.grey,
                                                               ),
                                                             ),
@@ -738,7 +734,7 @@ class _SinewixAnimePageState extends State<SinewixAnimePage> {
                                                           height: 60,
                                                           color: Colors.grey[900],
                                                           child: const Icon(
-                                                            Icons.image_not_supported,
+                                                            HugeIcons.strokeRoundedImageNotFound01,
                                                             color: Colors.grey,
                                                           ),
                                                         ),
@@ -761,7 +757,7 @@ class _SinewixAnimePageState extends State<SinewixAnimePage> {
                                                     children: [
                                                       if (episode.enableStream && episode.videos.isNotEmpty)
                                                         IconButton(
-                                                          icon: const Icon(Icons.play_circle),
+                                                          icon: const Icon(HugeIcons.strokeRoundedPlay),
                                                           onPressed: () {
                                                             // Episode oynatma dialog'ını göster
                                                             showDialog(
@@ -776,18 +772,21 @@ class _SinewixAnimePageState extends State<SinewixAnimePage> {
                                                         ),
                                                       if (episode.videos.isNotEmpty)
                                                         IconButton(
-                                                          icon: const Icon(Icons.download),
+                                                          icon: const Icon(HugeIcons.strokeRoundedDownload05),
                                                           onPressed: () async {
-                                                            // İndirme dialog'ını göster
+                                                            final safeFileName = _sanitizeFileName(
+                                                              '${tvShowDetail.title} - ${season.name} - ${episode.episodeNumber}. Bölüm'
+                                                            );
+                                                            
                                                             final saveLocation = await FilePicker.platform.saveFile(
                                                               dialogTitle: 'Kayıt Konumu Seç',
-                                                              fileName: '${tvShowDetail.title} - ${season.name} - ${episode.episodeNumber}. Bölüm.mp4',
+                                                              fileName: '$safeFileName.mp4',
                                                             );
 
                                                             if (saveLocation != null && context.mounted) {
                                                               DownloadManager().startDownload(
                                                                 episode.videos.first.link,
-                                                                '${tvShowDetail.title} - ${season.name} - ${episode.episodeNumber}. Bölüm', 
+                                                                safeFileName,
                                                                 saveLocation
                                                               );
                                                               Navigator.push(
@@ -929,7 +928,7 @@ class _SinewixAnimePageState extends State<SinewixAnimePage> {
                                               mainAxisSize: MainAxisSize.min,
                                               children: [
                                                 const Icon(
-                                                  Icons.star_rounded,
+                                                  HugeIcons.strokeRoundedStar,
                                                   size: 14,
                                                   color: Colors.amber,
                                                 ),
@@ -977,7 +976,7 @@ class _SinewixAnimePageState extends State<SinewixAnimePage> {
             MaterialPageRoute(builder: (context) => const DownloadsPage()),
           );
         },
-        child: const Icon(Icons.download),
+        child: const Icon(HugeIcons.strokeRoundedDownload05),
       ),
     );
   }
@@ -987,6 +986,38 @@ class _SinewixAnimePageState extends State<SinewixAnimePage> {
     _searchController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  // Yardımcı fonksiyonu ekleyin (sınıfın içine)
+  String _sanitizeFileName(String fileName) {
+    // Windows'ta yasaklı karakterleri temizle
+    var sanitized = fileName
+        .replaceAll(RegExp(r'[<>:"/\\|?*]'), '')  // Windows yasaklı karakterler
+        .replaceAll('\n', ' ')  // Yeni satırları boşlukla değiştir
+        .replaceAll('\r', '')   // Satır sonlarını kaldır
+        .trim();                // Baş ve sondaki boşlukları kaldır
+
+    // Türkçe karakterleri dönüştür
+    sanitized = sanitized
+        .replaceAll('ğ', 'g')
+        .replaceAll('Ğ', 'G')
+        .replaceAll('ü', 'u')
+        .replaceAll('Ü', 'U')
+        .replaceAll('ş', 's')
+        .replaceAll('Ş', 'S')
+        .replaceAll('ı', 'i')
+        .replaceAll('İ', 'I')
+        .replaceAll('ö', 'o')
+        .replaceAll('Ö', 'O')
+        .replaceAll('ç', 'c')
+        .replaceAll('Ç', 'C');
+
+    // Uzun dosya adlarını kısalt
+    if (sanitized.length > 200) {
+      sanitized = sanitized.substring(0, 200);
+    }
+
+    return sanitized;
   }
 }
 

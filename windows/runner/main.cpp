@@ -25,9 +25,19 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   project.set_dart_entrypoint_arguments(std::move(command_line_arguments));
 
   FlutterWindow window(project);
-  Win32Window::Point origin(10, 10);
+  // Ekran boyutlarını al
+  RECT workArea;
+  SystemParametersInfo(SPI_GETWORKAREA, 0, &workArea, 0);
+  int screenWidth = workArea.right - workArea.left;
+  int screenHeight = workArea.bottom - workArea.top;
+
+  // Pencere boyutları
   Win32Window::Size size(1280, 720);
-  if (!window.Create(L"shadebox", origin, size)) {
+  // Merkez pozisyonu hesapla
+  Win32Window::Point origin((screenWidth - size.width) / 2,
+                           (screenHeight - size.height) / 2);
+                           
+  if (!window.Create(L"ShadeBox", origin, size)) {
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);

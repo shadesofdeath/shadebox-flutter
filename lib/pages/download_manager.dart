@@ -1,7 +1,7 @@
 import 'dart:io';
+import 'package:ShadeBox/utils/mediafire_extractor.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:shadebox/utils/mediafire_extractor.dart';
 
 enum DownloadStatus {
   queued,

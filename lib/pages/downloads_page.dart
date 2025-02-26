@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'download_manager.dart';
+import 'package:hugeicons/hugeicons.dart';
 
 class DownloadsPage extends StatefulWidget {
   const DownloadsPage({super.key});
@@ -31,6 +32,10 @@ class _DownloadsPageState extends State<DownloadsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(HugeIcons.strokeRoundedArrowTurnBackward),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
         title: const Text('İndirilenler'),
         elevation: 0,
       ),
@@ -39,7 +44,7 @@ class _DownloadsPageState extends State<DownloadsPage> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.download_done_rounded, size: 64, color: Colors.grey[600]),
+                  Icon(HugeIcons.strokeRoundedDownload02, size: 64, color: Colors.grey[600]),
                   const SizedBox(height: 16),
                   Text('İndirme listesi boş',
                       style: TextStyle(color: Colors.grey[600], fontSize: 16)),
@@ -90,7 +95,7 @@ class _DownloadsPageState extends State<DownloadsPage> {
                               ),
                             ),
                             IconButton(
-                              icon: const Icon(Icons.cancel_rounded),
+                              icon: const Icon(HugeIcons.strokeRoundedCancel02),
                               onPressed: () => _manager.cancelAndDeleteDownload(task),
                               tooltip: 'İptal et',
                             ),

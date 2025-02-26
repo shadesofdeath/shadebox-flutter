@@ -1,45 +1,133 @@
 import 'package:flutter/material.dart';
+import 'package:flex_color_scheme/flex_color_scheme.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:hugeicons/hugeicons.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'pages/sinewix_film_page.dart';
 import 'pages/sinewix_dizi_page.dart';
 import 'pages/sinewix_anime_page.dart';
 import 'package:media_kit/media_kit.dart';
+import 'package:flutter/services.dart';
 
 void main() {
   MediaKit.ensureInitialized();
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
   @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  ThemeMode _themeMode = ThemeMode.system;
+  FlexScheme _colorScheme = FlexScheme.blueM3;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadThemePreferences();
+  }
+
+  Future<void> _loadThemePreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _themeMode = ThemeMode.values[prefs.getInt('themeMode') ?? 0];
+      _colorScheme = FlexScheme.values[prefs.getInt('colorScheme') ?? 0];
+    });
+  }
+
+  Future<void> _saveThemePreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('themeMode', _themeMode.index);
+    await prefs.setInt('colorScheme', _colorScheme.index);
+  }
+
+  void _updateSystemChrome(ThemeMode mode, BuildContext? context) {
+    final isDark = mode == ThemeMode.dark || 
+      (mode == ThemeMode.system && 
+        (context != null ? Theme.of(context).brightness == Brightness.dark : false));
+        
+    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+      statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+    ));
+  }
+
+  void updateThemeMode(ThemeMode mode) {
+    setState(() {
+      _themeMode = mode;
+      _updateSystemChrome(mode, context);
+      _saveThemePreferences();
+    });
+  }
+
+  void updateColorScheme(FlexScheme scheme) {
+    setState(() {
+      _colorScheme = scheme;
+      _saveThemePreferences();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    // ThemeMode değişikliğini algılamak için
+    _updateSystemChrome(_themeMode, context);
+
     return MaterialApp(
       title: 'ShadeBox',
-      themeMode: ThemeMode.system,
-      darkTheme: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.dark,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.blue,
-          brightness: Brightness.dark,
+      themeMode: _themeMode,
+      darkTheme: FlexThemeData.dark(
+        scheme: _colorScheme,
+        surfaceMode: FlexSurfaceMode.levelSurfacesLowScaffold,
+        blendLevel: 13,
+        subThemesData: const FlexSubThemesData(
+          blendOnLevel: 20,
+          defaultRadius: 12.0,
+          elevatedButtonSchemeColor: SchemeColor.primary,
         ),
-      ),
-      theme: ThemeData(
+        visualDensity: FlexColorScheme.comfortablePlatformDensity,
         useMaterial3: true,
-        brightness: Brightness.light,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.blue,
-          brightness: Brightness.light,
-        ),
+        fontFamily: GoogleFonts.roboto().fontFamily,
       ),
-      home: const HomePage(),
+      theme: FlexThemeData.light(
+        scheme: _colorScheme,
+        surfaceMode: FlexSurfaceMode.levelSurfacesLowScaffold,
+        blendLevel: 7,
+        subThemesData: const FlexSubThemesData(
+          defaultRadius: 12.0,
+          elevatedButtonSchemeColor: SchemeColor.primary,
+        ),
+        visualDensity: FlexColorScheme.comfortablePlatformDensity,
+        useMaterial3: true,
+        fontFamily: GoogleFonts.roboto().fontFamily,
+      ),
+      home: HomePage(
+        updateThemeMode: updateThemeMode,
+        updateColorScheme: updateColorScheme,
+        currentThemeMode: _themeMode,
+        currentColorScheme: _colorScheme,
+      ),
     );
   }
 }
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  final Function(ThemeMode) updateThemeMode;
+  final Function(FlexScheme) updateColorScheme;
+  final ThemeMode currentThemeMode;
+  final FlexScheme currentColorScheme;
+
+  const HomePage({
+    super.key,
+    required this.updateThemeMode,
+    required this.updateColorScheme,
+    required this.currentThemeMode,
+    required this.currentColorScheme,
+  });
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -61,15 +149,12 @@ class _HomePageState extends State<HomePage> {
         children: [
           Container(
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface.withOpacity(0.8),
-              borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(24),
-                bottomRight: Radius.circular(24),
-              ),
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 20,
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 10,
                 ),
               ],
             ),
@@ -77,24 +162,69 @@ class _HomePageState extends State<HomePage> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: SafeArea(
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'Sinewix',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
+                  Row(
+                    children: [
+                      Text(
+                        'ShadeBox',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                      const SizedBox(width: 32),
+                      ...List.generate(
+                        _pages.length,
+                        (index) => _buildTabItem(
+                          index: index,
+                          title: ['Film', 'Dizi', 'Anime'][index],
+                          icon: [HugeIcons.strokeRoundedVideo01, HugeIcons.strokeRoundedVideo02, HugeIcons.strokeRoundedVideo01][index],
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 32),
-                  ...List.generate(
-                    _pages.length,
-                    (index) => _buildTabItem(
-                      index: index,
-                      title: ['Film', 'Dizi', 'Anime'][index],
-                      icon: [Icons.movie_outlined, Icons.tv_outlined, Icons.animation_outlined][index],
-                    ),
+                  Row(
+                    children: [
+                      PopupMenuButton<FlexScheme>(
+                        tooltip: 'Renk Teması',
+                        icon: const Icon(HugeIcons.strokeRoundedColors),
+                        initialValue: widget.currentColorScheme,
+                        onSelected: widget.updateColorScheme,
+                        itemBuilder: (context) => FlexScheme.values
+                            .take(20)
+                            .map((scheme) => PopupMenuItem(
+                                  value: scheme,
+                                  child: Text(scheme.toString().split('.').last),
+                                ))
+                            .toList(),
+                      ),
+                      PopupMenuButton<ThemeMode>(
+                        tooltip: 'Tema Modu',
+                        icon: Icon(widget.currentThemeMode == ThemeMode.light
+                            ? HugeIcons.strokeRoundedSun02
+                            : widget.currentThemeMode == ThemeMode.dark
+                                ? HugeIcons.strokeRoundedMoon02
+                                : HugeIcons.strokeRoundedSun02),
+                        initialValue: widget.currentThemeMode,
+                        onSelected: widget.updateThemeMode,
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: ThemeMode.system,
+                            child: Text('Otomatik'),
+                          ),
+                          const PopupMenuItem(
+                            value: ThemeMode.light,
+                            child: Text('Açık Tema'),
+                          ),
+                          const PopupMenuItem(
+                            value: ThemeMode.dark,
+                            child: Text('Koyu Tema'),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -167,3 +297,4 @@ class _HomePageState extends State<HomePage> {
     );
   }
 }
+

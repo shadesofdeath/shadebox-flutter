@@ -1,18 +1,19 @@
 import 'dart:typed_data';
+import 'package:ShadeBox/pages/download_manager.dart';
+import 'package:ShadeBox/pages/downloads_page.dart';
+import 'package:ShadeBox/utils/mediafire_extractor.dart';
+import 'package:ShadeBox/widgets/video_player_dialog.dart';
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'dart:async'; 
 import 'package:http/http.dart' as http;
-import 'package:shadebox/pages/download_manager.dart';
-import 'package:shadebox/pages/downloads_page.dart';
-import 'package:shadebox/utils/mediafire_extractor.dart';
+import 'package:hugeicons/hugeicons.dart';
 import 'package:video_player/video_player.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 import 'package:dio/dio.dart';
-import 'package:shadebox/widgets/video_player_dialog.dart';
 
 class Movie {
   final int id;
@@ -393,7 +394,7 @@ class _SinewixFilmPageState extends State<SinewixFilmPage> {
                                               color: Colors.grey[900],
                                               child: const Center(
                                                 child: Icon(
-                                                  Icons.image_not_supported,
+                                                  HugeIcons.strokeRoundedImageNotFound01,
                                                   size: 50,
                                                   color: Colors.grey,
                                                 ),
@@ -404,7 +405,7 @@ class _SinewixFilmPageState extends State<SinewixFilmPage> {
                                             color: Colors.grey[900],
                                             child: const Center(
                                               child: Icon(
-                                                Icons.image_not_supported,
+                                                HugeIcons.strokeRoundedImageNotFound01,
                                                 size: 50,
                                                 color: Colors.grey,
                                               ),
@@ -432,7 +433,7 @@ class _SinewixFilmPageState extends State<SinewixFilmPage> {
                                           backgroundColor: Colors.black45,
                                           child: IconButton(
                                             icon: const Icon(
-                                              Icons.play_arrow,
+                                              HugeIcons.strokeRoundedPlay,
                                               size: 40,
                                               color: Colors.white,
                                             ),
@@ -454,7 +455,7 @@ class _SinewixFilmPageState extends State<SinewixFilmPage> {
                                           backgroundColor: Colors.black45,
                                           child: IconButton(
                                             icon: const Icon(
-                                              Icons.download,
+                                              HugeIcons.strokeRoundedDownload05,
                                               size: 40,
                                               color: Colors.white,
                                             ),
@@ -498,7 +499,7 @@ class _SinewixFilmPageState extends State<SinewixFilmPage> {
                                               ),
                                               child: Row(
                                                 children: [
-                                                  const Icon(Icons.star, size: 16),
+                                                  const Icon(HugeIcons.strokeRoundedStar, size: 16),
                                                   const SizedBox(width: 4),
                                                   Text(
                                                     movieDetail.voteAverage.toStringAsFixed(1),
@@ -623,7 +624,7 @@ class _SinewixFilmPageState extends State<SinewixFilmPage> {
                                                           ? NetworkImage(cast.profilePath!)
                                                           : null,
                                                       child: cast.profilePath == null
-                                                          ? const Icon(Icons.person, size: 40)
+                                                          ? const Icon(HugeIcons.strokeRoundedUser, size: 40)
                                                           : null,
                                                     ),
                                                   ),
@@ -848,7 +849,7 @@ class _SinewixFilmPageState extends State<SinewixFilmPage> {
                                                   mainAxisSize: MainAxisSize.min,
                                                   children: [
                                                     const Icon(
-                                                      Icons.star_rounded,
+                                                      HugeIcons.strokeRoundedStar,
                                                       size: 14,
                                                       color: Colors.amber,
                                                     ),
@@ -942,11 +943,9 @@ class _SinewixFilmPageState extends State<SinewixFilmPage> {
         // İndirmeyi başlat
         DownloadManager().startDownload(videoUrl, title, saveLocation);
         
-        // Ana sayfaya dön ve downloads sayfasına git
+        // pushReplacement yerine push kullan
         if (!mounted) return;
-        
-        // Navigator.pop yerine replacementları kullan
-        Navigator.of(context).pushReplacement(
+        Navigator.of(context).push(
           MaterialPageRoute(
             builder: (context) => const DownloadsPage(),
           ),
