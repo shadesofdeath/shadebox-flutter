@@ -103,6 +103,29 @@ class SetupService {
     }
   }
 
+  Future<bool> isGitInstalled() async {
+    try {
+      final result = await Process.run('git', ['--version']);
+      return result.exitCode == 0;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<void> installGit() async {
+    if (Platform.isLinux) {
+      try {
+        print('Git yükleniyor...');
+        await shell.run('sudo apt-get update');
+        await shell.run('sudo apt-get install -y git');
+        print('Git kurulumu tamamlandı!');
+      } catch (e) {
+        print('Git kurulum hatası: $e');
+        rethrow;
+      }
+    }
+  }
+
   Future<bool> checkApiUpdates(String localPath) async {
     try {
       print('API güncellemeleri kontrol ediliyor...');
@@ -156,10 +179,22 @@ class SetupService {
       print('API kurulumu başlıyor...');
       print('Çalışma dizini: $apiPath');
 
+      // Git kontrolü
+      if (!await isGitInstalled()) {
+        print('Git yüklü değil, yükleniyor...');
+        await installGit();
+      }
+
       bool shouldUpdate = true;
 
+      // API klasörü kontrolü ve oluşturma
+      final apiDir = Directory(apiPath);
+      if (!await apiDir.exists()) {
+        await apiDir.create(recursive: true);
+      }
+
       // Eğer API klasörü varsa, güncelleme kontrolü yap
-      if (await Directory(apiPath).exists()) {
+      if (await Directory('$apiPath/.git').exists()) {
         shouldUpdate = await checkApiUpdates(apiPath);
       }
 
@@ -171,55 +206,92 @@ class SetupService {
         if (await Directory(apiPath).exists()) {
           print('Eski API siliniyor...');
           await Directory(apiPath).delete(recursive: true);
+          await Directory(apiPath).create(recursive: true);
         }
       
         print('GitHub\'dan API indiriliyor...');
-        var result = await Process.run('git', ['clone', apiRepo, apiPath]);
-        if (result.exitCode != 0) {
-          throw Exception('Git clone hatası: ${result.stderr}');
+        
+        // Git clone işlemini shell üzerinden yap
+        if (Platform.isLinux) {
+          try {
+            await shell.cd(appDir.path);
+            await shell.run('git clone $apiRepo KekikStreamAPI');
+          } catch (e) {
+            print('Linux git clone hatası: $e');
+            // Alternatif yöntem dene
+            var result = await Process.run('git', 
+              ['clone', apiRepo, apiPath],
+              workingDirectory: appDir.path,
+              runInShell: true
+            );
+            if (result.exitCode != 0) {
+              throw Exception('Git clone hatası: ${result.stderr}');
+            }
+          }
+        } else {
+          var result = await Process.run('git', ['clone', apiRepo, apiPath]);
+          if (result.exitCode != 0) {
+            throw Exception('Git clone hatası: ${result.stderr}');
+          }
         }
+
         print('API indirildi: $apiPath');
 
         // Python paketlerini kur
-        // Python ve pip'in tam yolunu kontrol et
         final pythonPath = Platform.isWindows ? 'C:\\Python311\\python.exe' : 'python3';
         final pipPath = Platform.isWindows ? 'C:\\Python311\\Scripts\\pip.exe' : 'pip3';
 
         print('Python paketleri kuruluyor...');
-        if (Platform.isWindows) {
-          // Önce pip'i güncelleyelim
-          result = await Process.run(pythonPath, ['-m', 'ensurepip', '--upgrade']);
-          if (result.exitCode != 0) {
-            throw Exception('Pip yükseltme hatası: ${result.stderr}');
-          }
-
-          result = await Process.run(pythonPath, ['-m', 'pip', 'install', '--upgrade', 'pip']);
-          if (result.exitCode != 0) {
-            throw Exception('Pip yükseltme hatası: ${result.stderr}');
-          }
-
-          // requirements.txt dosyasının varlığını kontrol et
-          final requirementsFile = File('$apiPath/requirements.txt');
-          if (!await requirementsFile.exists()) {
-            throw Exception('requirements.txt dosyası bulunamadı: ${requirementsFile.path}');
-          }
-
-          // Paketleri kur
-          result = await Process.run(
-            pipPath,
-            ['install', '-r', 'requirements.txt'],
-            workingDirectory: apiPath,
-            runInShell: true
-          );
-          
-          if (result.exitCode != 0) {
-            throw Exception('Paket kurulum hatası: ${result.stderr}');
+        
+        if (Platform.isLinux) {
+          try {
+            await shell.cd(apiPath);
+            // pip yüklü değilse yükle
+            await shell.run('sudo apt-get install -y python3-pip');
+            // requirements.txt dosyasını kontrol et
+            if (await File('$apiPath/requirements.txt').exists()) {
+              await shell.run('pip3 install --user -r requirements.txt');
+            } else {
+              throw Exception('requirements.txt dosyası bulunamadı');
+            }
+          } catch (e) {
+            print('Linux paket kurulum hatası: $e');
+            rethrow;
           }
         } else {
-          var shell = Shell();
-          await shell.cd(apiPath);
-          await shell.run('pip3 install -r requirements.txt');
+          // Windows için mevcut kod
+          if (Platform.isWindows) {
+            // Önce pip'i güncelleyelim
+            var result = await Process.run(pythonPath, ['-m', 'ensurepip', '--upgrade']);
+            if (result.exitCode != 0) {
+              throw Exception('Pip yükseltme hatası: ${result.stderr}');
+            }
+  
+            result = await Process.run(pythonPath, ['-m', 'pip', 'install', '--upgrade', 'pip']);
+            if (result.exitCode != 0) {
+              throw Exception('Pip yükseltme hatası: ${result.stderr}');
+            }
+  
+            // requirements.txt dosyasının varlığını kontrol et
+            final requirementsFile = File('$apiPath/requirements.txt');
+            if (!await requirementsFile.exists()) {
+              throw Exception('requirements.txt dosyası bulunamadı: ${requirementsFile.path}');
+            }
+  
+            // Paketleri kur
+            result = await Process.run(
+              pipPath,
+              ['install', '-r', 'requirements.txt'],
+              workingDirectory: apiPath,
+              runInShell: true
+            );
+            
+            if (result.exitCode != 0) {
+              throw Exception('Paket kurulum hatası: ${result.stderr}');
+            }
+          }
         }
+        
         print('API kurulumu tamamlandı!');
       } else {
         print('API zaten güncel, kurulum atlanıyor.');
