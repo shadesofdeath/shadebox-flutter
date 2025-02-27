@@ -254,7 +254,6 @@ class SetupService {
 
   Future<void> setupAPI() async {
     try {
-      // Shell'i başlat ve değerini al
       shell = await initializeShell();
 
       if (Platform.isLinux) {
@@ -264,7 +263,6 @@ class SetupService {
       final appDir = await getApplicationDocumentsDirectory();
       final apiPath = '${appDir.path}/KekikStreamAPI';
       
-      // API klasörünü oluştur
       final apiDir = Directory(apiPath);
       if (!await apiDir.exists()) {
         await apiDir.create(recursive: true);
@@ -272,26 +270,51 @@ class SetupService {
 
       // Git clone işlemi
       print('API indiriliyor...');
-      final cloneResult = await shell!.run('git clone $apiRepo $apiPath');
-      if (cloneResult.any((result) => result.exitCode != 0)) {
-        throw Exception('Git clone hatası: ${cloneResult.map((r) => r.stderr).join('\n')}');
+      if (await apiDir.list().isEmpty) {
+        final cloneResult = await shell!.run('git clone $apiRepo "$apiPath"');
+        if (cloneResult.any((result) => result.exitCode != 0)) {
+          throw Exception('Git clone hatası: ${cloneResult.map((r) => r.stderr).join('\n')}');
+        }
       }
 
-      // Python sanal ortam oluştur
+      // Python sanal ortam oluştur ve paketleri kur
       if (Platform.isLinux) {
         final venvPath = '$apiPath/venv';
-        await shell!.run('python3 -m venv $venvPath');
+        print('Python sanal ortam oluşturuluyor...');
         
-        // Sanal ortamı aktive et ve paketleri kur
-        final pipResult = await shell!.run('''
-          source $venvPath/bin/activate &&
-          pip install --upgrade pip &&
-          cd $apiPath &&
-          pip install -r requirements.txt
-        ''');
+        // Önce mevcut venv'i temizle
+        if (await Directory(venvPath).exists()) {
+          await Directory(venvPath).delete(recursive: true);
+        }
 
-        if (pipResult.any((result) => result.exitCode != 0)) {
-          throw Exception('Pip kurulum hatası: ${pipResult.map((r) => r.stderr).join('\n')}');
+        // Yeni venv oluştur
+        await shell!.run('python3 -m venv "$venvPath"');
+        
+        print('Pip paketleri kuruluyor...');
+        
+        // Linux'ta komutları ayrı ayrı çalıştır
+        await shell!.cd(apiPath);
+        
+        // Sanal ortamı aktive et
+        final activateCmd = '''
+        . "$venvPath/bin/activate" && 
+        python3 -m pip install --upgrade pip &&
+        python3 -m pip install -r requirements.txt
+        ''';
+        
+        // Bash üzerinden çalıştır
+        final pipResult = await Process.run(
+          'bash',
+          ['-c', activateCmd],
+          workingDirectory: apiPath,
+          environment: {
+            'PATH': Platform.environment['PATH'] ?? '',
+            'PYTHONPATH': apiPath,
+          },
+        );
+
+        if (pipResult.exitCode != 0) {
+          throw Exception('Pip kurulum hatası: ${pipResult.stderr}');
         }
       }
 
@@ -396,13 +419,15 @@ class SetupService {
 
       return process;
     } else {
+      // Linux için Python yolunu ve aktivasyon scriptini kullan
       return await Process.start(
-        '$venvPath/bin/python3',
-        ['basla.py'],
+        'bash',
+        ['-c', '. "$venvPath/bin/activate" && python3 basla.py'],
         workingDirectory: apiPath,
         environment: {
           'PYTHONIOENCODING': 'utf-8',
-          'PATH': Platform.environment['PATH']!
+          'PATH': Platform.environment['PATH'] ?? '',
+          'PYTHONPATH': apiPath,
         }
       );
     }
