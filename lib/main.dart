@@ -12,10 +12,15 @@ import 'package:media_kit/media_kit.dart';
 import 'package:flutter/services.dart';
 import 'dart:io';
 import 'package:window_manager/window_manager.dart';
+import 'package:loading_overlay/loading_overlay.dart';
+import 'services/setup_service.dart';
+import 'package:http/http.dart' as http;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
+  
+  final setupService = SetupService();
   
   // Pencereyi ortala
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
@@ -35,11 +40,13 @@ void main() async {
     });
   }
   
-  runApp(const MyApp());
+  runApp(MyApp(setupService: setupService));
 }
 
 class MyApp extends StatefulWidget {
-  const MyApp({super.key});
+  final SetupService setupService;
+  
+  const MyApp({super.key, required this.setupService});
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -48,11 +55,59 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   ThemeMode _themeMode = ThemeMode.system;
   FlexScheme _colorScheme = FlexScheme.blueM3;
+  bool _isLoading = true;
+  String _loadingMessage = 'Sistem kontrol ediliyor...';
+  Process? _apiProcess;
 
   @override
   void initState() {
     super.initState();
     _loadThemePreferences();
+    _initializeSystem();
+  }
+
+  @override
+  void dispose() {
+    // API processini temizle
+    _apiProcess?.kill();
+    super.dispose();
+  }
+
+  Future<void> _initializeSystem() async {
+    try {
+      setState(() => _loadingMessage = 'Python kontrolü yapılıyor...');
+      if (!await widget.setupService.isPythonInstalled()) {
+        setState(() => _loadingMessage = 'Python kurulumu başlatılıyor...');
+        await widget.setupService.installPython();
+        setState(() => _loadingMessage = 'Python kurulumu tamamlanıyor...');
+        await widget.setupService.waitForPythonInstallation();
+      }
+
+      setState(() => _loadingMessage = 'API indiriliyor...');
+      await widget.setupService.setupAPI();
+
+      setState(() => _loadingMessage = 'API başlatılıyor...');
+      _apiProcess = await widget.setupService.startAPI();
+
+      setState(() {
+        _loadingMessage = 'Sistem hazır!';
+        _isLoading = false;
+      });
+      
+    } catch (e, stackTrace) {
+      setState(() {
+        _loadingMessage = '''Hata oluştu:
+$e
+
+API Çıktıları için konsolu kontrol edin.
+Lütfen uygulamayı yeniden başlatın.''';
+        _isLoading = true;
+      });
+      print('Hata detayı:');
+      print(e);
+      print('Stack trace:');
+      print(stackTrace);
+    }
   }
 
   Future<void> _loadThemePreferences() async {
@@ -128,11 +183,64 @@ class _MyAppState extends State<MyApp> {
         useMaterial3: true,
         fontFamily: GoogleFonts.roboto().fontFamily,
       ),
-      home: HomePage(
-        updateThemeMode: updateThemeMode,
-        updateColorScheme: updateColorScheme,
-        currentThemeMode: _themeMode,
-        currentColorScheme: _colorScheme,
+      home: Stack(
+        children: [
+          HomePage(
+            updateThemeMode: updateThemeMode,
+            updateColorScheme: updateColorScheme,
+            currentThemeMode: _themeMode,
+            currentColorScheme: _colorScheme,
+          ),
+          if (_isLoading)
+            Container(
+              color: Colors.black.withOpacity(0.85),
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 10,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const SizedBox(
+                        width: 40,
+                        height: 40,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 3,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      Text(
+                        _loadingMessage,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          shadows: [
+                            Shadow(
+                              color: Colors.black54,
+                              blurRadius: 4,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

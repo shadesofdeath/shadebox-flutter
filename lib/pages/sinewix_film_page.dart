@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'dart:typed_data';
 import 'package:ShadeBox/pages/download_manager.dart';
 import 'package:ShadeBox/pages/downloads_page.dart';
@@ -8,6 +9,7 @@ import 'dart:convert';
 import 'dart:async'; 
 import 'package:http/http.dart' as http;
 import 'package:hugeicons/hugeicons.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -38,6 +40,16 @@ class Movie {
       type: json['type'] ?? 'movie',
       voteAverage: (json['vote_average'] ?? 0.0).toDouble(),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'poster_path': posterPath,
+      'type': type,
+      'vote_average': voteAverage,
+    };
   }
 }
 
@@ -188,6 +200,10 @@ class _SinewixFilmPageState extends State<SinewixFilmPage> {
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
   final ImageCache imageCache = PaintingBinding.instance.imageCache;
+  final PageController _recentMoviesController = PageController();
+  List<Movie> _recentlyWatched = [];
+  Timer? _autoScrollTimer;
+  int _currentRecentPage = 0;
 
   final List<Category> _categories = [
     Category(id: "all", name: "Tüm Filmler", url: "/sinewix/movies"),
@@ -213,6 +229,51 @@ class _SinewixFilmPageState extends State<SinewixFilmPage> {
     _selectedCategory = _categories.first.id;
     _scrollController.addListener(_scrollListener);
     _fetchMovies();
+    _loadRecentlyWatched();
+    _startAutoScroll();
+  }
+
+  void _startAutoScroll() {
+    _autoScrollTimer?.cancel();
+    _autoScrollTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+      if (_recentlyWatched.isNotEmpty && mounted) {
+        final pageCount = (_recentlyWatched.length / 8).ceil();
+        final nextPage = (_currentRecentPage + 1) % pageCount;
+        
+        _recentMoviesController.animateToPage(
+          nextPage,
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeInOut,
+        );
+      }
+    });
+  }
+
+  Future<void> _loadRecentlyWatched() async {
+    final prefs = await SharedPreferences.getInstance();
+    final recentMoviesJson = prefs.getStringList('recent_movies') ?? [];
+    setState(() {
+      _recentlyWatched = recentMoviesJson
+          .map((json) => Movie.fromJson(jsonDecode(json)))
+          .toList();
+    });
+  }
+
+  Future<void> _saveRecentMovie(Movie movie) async {
+    if (_recentlyWatched.any((m) => m.id == movie.id)) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    _recentlyWatched.insert(0, movie);
+    if (_recentlyWatched.length > 20) {
+      _recentlyWatched.removeLast();
+    }
+
+    await prefs.setStringList(
+      'recent_movies',
+      _recentlyWatched.map((m) => jsonEncode(m.toJson())).toList(),
+    );
+
+    setState(() {});
   }
 
   void _scrollListener() {
@@ -347,6 +408,7 @@ class _SinewixFilmPageState extends State<SinewixFilmPage> {
   }
 
   Future<void> _showMovieDetails(Movie movie) async {
+    // Son izlenenlere ekleme kısmını kaldırdık
     setState(() => _isLoading = true);
     try {
       final response = await http.get(
@@ -438,6 +500,8 @@ class _SinewixFilmPageState extends State<SinewixFilmPage> {
                                               color: Colors.white,
                                             ),
                                             onPressed: () {
+                                              // Film izlendiğinde son izlenenlere ekle
+                                              _saveRecentMovie(movie);
                                               final videoUrl = movieDetail.videos.first.link;
                                               showDialog(
                                                 context: context,
@@ -682,19 +746,168 @@ class _SinewixFilmPageState extends State<SinewixFilmPage> {
     }
   }
 
+  Widget _buildRecentlyWatchedSection() {
+    if (_recentlyWatched.isEmpty) return const SizedBox.shrink();
+
+    final int itemsPerPage = 8;
+    final int pageCount = (_recentlyWatched.length / itemsPerPage).ceil();
+
+    return Column(
+      mainAxisSize: MainAxisSize.min, // Ekledik
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(left: 16, top: 16, bottom: 8), // top padding ekledik
+          child: Text(
+            'Son İzlenenler',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        SizedBox(
+          height: 240, // Yüksekliği biraz daha azalttık
+          child: PageView.builder(
+            controller: _recentMoviesController,
+            onPageChanged: (page) {
+              setState(() => _currentRecentPage = page);
+            },
+            itemCount: pageCount,
+            itemBuilder: (context, pageIndex) {
+              final startIndex = pageIndex * itemsPerPage;
+              final endIndex = min(startIndex + itemsPerPage, _recentlyWatched.length);
+              final pageMovies = _recentlyWatched.sublist(startIndex, endIndex);
+
+              return GridView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 8,
+                  childAspectRatio: 0.65,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12, // Spacing'i azalttık
+                ),
+                itemCount: pageMovies.length,
+                itemBuilder: (context, index) {
+                  final movie = pageMovies[index];
+                  return _buildMovieCard(movie);
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMovieCard(Movie movie) {
+    return Card(
+      elevation: 0,
+      clipBehavior: Clip.hardEdge,
+      color: Theme.of(context).colorScheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(
+          color: Theme.of(context).colorScheme.outline.withOpacity(0.1),
+          width: 1,
+        ),
+      ),
+      child: InkWell(
+        onTap: () => _showMovieDetails(movie),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.network(
+                    movie.posterPath,
+                    fit: BoxFit.cover,
+                    frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                      if (wasSynchronouslyLoaded) return child;
+                      return AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 300),
+                        child: frame != null
+                            ? child
+                            : Container(
+                                color: Colors.grey[800],
+                                child: const Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                              ),
+                      );
+                    },
+                  ),
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface.withOpacity(0.8),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.star,
+                            size: 14,
+                            color: Colors.amber,
+                          ),
+                          const SizedBox(width: 2),
+                          Text(
+                            movie.voteAverage.toStringAsFixed(1),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Text(
+                movie.title,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold( // Column yerine Scaffold kullanıyoruz
+    return Scaffold(
       body: Column(
         children: [
+          // Arama ve kategori seçimi
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0), // padding'i küçülttük
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             child: Row(
               children: [
                 Expanded(
                   flex: 3,
                   child: SizedBox(
-                    height: 40, // Yüksekliği küçülttük
+                    height: 40,
                     child: TextField(
                       controller: _searchController,
                       onChanged: (query) {
@@ -722,7 +935,7 @@ class _SinewixFilmPageState extends State<SinewixFilmPage> {
                 Expanded(
                   flex: 1,
                   child: SizedBox(
-                    height: 40, // Yüksekliği küçülttük
+                    height: 40,
                     child: DropdownButtonFormField<String>(
                       value: _selectedCategory,
                       decoration: InputDecoration(
@@ -753,142 +966,154 @@ class _SinewixFilmPageState extends State<SinewixFilmPage> {
               ],
             ),
           ),
+          
+          // Film listesi ve son izlenenler
           Expanded(
-            child: _isLoading && _movies.isEmpty
-                ? const Center(child: CircularProgressIndicator())
-                : _filteredMovies.isEmpty
-                    ? const Center(child: Text('Film bulunamadı'))
-                    : GridView.builder(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.all(16),
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 8,
-                          childAspectRatio: 0.65,
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 16,
-                        ),
-                        itemCount: _filteredMovies.length + (_isLoadingMore ? 1 : 0),
-                        itemBuilder: (context, index) {
-                          if (index == _filteredMovies.length) {
-                            return const Center(
-                              child: Padding(
-                                padding: EdgeInsets.all(8.0),
-                                child: CircularProgressIndicator(),
-                              ),
-                            );
-                          }
-                          final movie = _filteredMovies[index];
-                          return LayoutBuilder(
-                            builder: (context, constraints) {
-                              return Card(
-                                elevation: 0,
-                                clipBehavior: Clip.hardEdge, // Bunu ekledik
-                                color: Theme.of(context).colorScheme.surface,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                  side: BorderSide(
-                                    color: Theme.of(context).colorScheme.outline.withOpacity(0.1),
-                                    width: 1,
-                                  ),
+            child: CustomScrollView(
+              controller: _scrollController,
+              slivers: [
+                // Son izlenenler bölümü
+                SliverToBoxAdapter(
+                  child: _buildRecentlyWatchedSection(),
+                ),
+                
+                // Film grid'i
+                SliverPadding(
+                  padding: const EdgeInsets.only(top: 4), // Boşluğu azalttık
+                  sliver: SliverGrid(
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 8,
+                      childAspectRatio: 0.65,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 16,
+                    ),
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        if (index == _filteredMovies.length) {
+                          return const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(8.0),
+                              child: CircularProgressIndicator(),
+                            ),
+                          );
+                        }
+                        final movie = _filteredMovies[index];
+                        return LayoutBuilder(
+                          builder: (context, constraints) {
+                            return Card(
+                              elevation: 0,
+                              clipBehavior: Clip.hardEdge, // Bunu ekledik
+                              color: Theme.of(context).colorScheme.surface,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                side: BorderSide(
+                                  color: Theme.of(context).colorScheme.outline.withOpacity(0.1),
+                                  width: 1,
                                 ),
-                                child: InkWell(
-                                  onTap: () => _showMovieDetails(movie),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.stretch, // Bunu ekledik
-                                    children: [
-                                      Expanded(
-                                        child: Stack(
-                                          fit: StackFit.expand,
-                                          children: [
-                                            Image.network(
-                                              movie.posterPath,
-                                              fit: BoxFit.cover,
-                                              width: double.infinity, // Bunu ekledik
-                                              height: double.infinity, // Bunu ekledik
-                                              // Görüntü yükleme optimizasyonları
-                                              frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-                                                if (wasSynchronouslyLoaded) return child;
-                                                return AnimatedSwitcher(
-                                                  duration: const Duration(milliseconds: 300),
-                                                  child: frame != null
-                                                      ? child
-                                                      : Container(
-                                                          color: Colors.grey[800],
-                                                          child: const Center(
-                                                            child: CircularProgressIndicator(),
-                                                          ),
+                              ),
+                              child: InkWell(
+                                onTap: () => _showMovieDetails(movie),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch, // Bunu ekledik
+                                  children: [
+                                    Expanded(
+                                      child: Stack(
+                                        fit: StackFit.expand,
+                                        children: [
+                                          Image.network(
+                                            movie.posterPath,
+                                            fit: BoxFit.cover,
+                                            width: double.infinity, // Bunu ekledik
+                                            height: double.infinity, // Bunu ekledik
+                                            // Görüntü yükleme optimizasyonları
+                                            frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                                              if (wasSynchronouslyLoaded) return child;
+                                              return AnimatedSwitcher(
+                                                duration: const Duration(milliseconds: 300),
+                                                child: frame != null
+                                                    ? child
+                                                    : Container(
+                                                        color: Colors.grey[800],
+                                                        child: const Center(
+                                                          child: CircularProgressIndicator(),
                                                         ),
-                                                );
-                                              },
-                                              errorBuilder: (context, error, stackTrace) =>
-                                                  Container(
-                                                    color: Colors.grey[900],
-                                                    child: const Icon(
-                                                      Icons.error_outline,
-                                                      color: Colors.white54,
+                                                      ),
+                                              );
+                                            },
+                                            errorBuilder: (context, error, stackTrace) =>
+                                                Container(
+                                                  color: Colors.grey[900],
+                                                  child: const Icon(
+                                                    Icons.error_outline,
+                                                    color: Colors.white54,
+                                                  ),
+                                                ),
+                                            // Görüntü kalitesi ve boyut optimizasyonları  
+                                            cacheWidth: (constraints.maxWidth * 2).toInt(),
+                                            cacheHeight: (constraints.maxHeight * 2).toInt(),
+                                            filterQuality: FilterQuality.medium,
+                                          ),
+                                          Positioned(
+                                            top: 8,
+                                            right: 8,
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 6,
+                                                vertical: 2,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: Theme.of(context).colorScheme.surface.withOpacity(0.8),
+                                                borderRadius: BorderRadius.circular(4),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  const Icon(
+                                                    HugeIcons.strokeRoundedStar,
+                                                    size: 14,
+                                                    color: Colors.amber,
+                                                  ),
+                                                  const SizedBox(width: 2),
+                                                  Text(
+                                                    movie.voteAverage.toStringAsFixed(1),
+                                                    style: const TextStyle(
+                                                      fontSize: 12,
+                                                      fontWeight: FontWeight.w500,
                                                     ),
                                                   ),
-                                              // Görüntü kalitesi ve boyut optimizasyonları  
-                                              cacheWidth: (constraints.maxWidth * 2).toInt(),
-                                              cacheHeight: (constraints.maxHeight * 2).toInt(),
-                                              filterQuality: FilterQuality.medium,
-                                            ),
-                                            Positioned(
-                                              top: 8,
-                                              right: 8,
-                                              child: Container(
-                                                padding: const EdgeInsets.symmetric(
-                                                  horizontal: 6,
-                                                  vertical: 2,
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  color: Theme.of(context).colorScheme.surface.withOpacity(0.8),
-                                                  borderRadius: BorderRadius.circular(4),
-                                                ),
-                                                child: Row(
-                                                  mainAxisSize: MainAxisSize.min,
-                                                  children: [
-                                                    const Icon(
-                                                      HugeIcons.strokeRoundedStar,
-                                                      size: 14,
-                                                      color: Colors.amber,
-                                                    ),
-                                                    const SizedBox(width: 2),
-                                                    Text(
-                                                      movie.voteAverage.toStringAsFixed(1),
-                                                      style: const TextStyle(
-                                                        fontSize: 12,
-                                                        fontWeight: FontWeight.w500,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
+                                                ],
                                               ),
                                             ),
-                                          ],
-                                        ),
-                                      ),
-                                      Padding(
-                                        padding: const EdgeInsets.all(8.0),
-                                        child: Text(
-                                          movie.title,
-                                          style: const TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w500,
                                           ),
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                          textAlign: TextAlign.center,
-                                        ),
+                                        ],
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                    Padding(
+                                      padding: const EdgeInsets.all(8.0),
+                                      child: Text(
+                                        movie.title,
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              );
-                            },
-                          );
-                        },
-                      ),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                      childCount: _filteredMovies.length + (_isLoadingMore ? 1 : 0),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -906,6 +1131,8 @@ class _SinewixFilmPageState extends State<SinewixFilmPage> {
 
   @override
   void dispose() {
+    _autoScrollTimer?.cancel();
+    _recentMoviesController.dispose();
     // Belleği temizle
     imageCache.clear();
     imageCache.clearLiveImages();
