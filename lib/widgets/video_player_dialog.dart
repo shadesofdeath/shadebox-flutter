@@ -66,12 +66,18 @@ class _VideoPlayerDialogState extends State<VideoPlayerDialog> {
   Timer? _remainingTimeTimer;
   String _sleepAction = 'pause'; // 'pause' veya 'close'
 
+  // Kontrollerin görünürlüğü için yeni değişkenler
+  bool _showControls = true;
+  Timer? _hideControlsTimer;
+
   @override
   void initState() {
     super.initState();
     _initializePlayer();
     _setupTrackListeners();
     _loadSavedSubtitleSettings(); // Kayıtlı ayarları yükle
+    // Mouse hareketi için listener ekle
+    _startHideControlsTimer();
   }
 
   Future<void> _initializePlayer() async {
@@ -870,56 +876,92 @@ class _VideoPlayerDialogState extends State<VideoPlayerDialog> {
     );
   }
 
+  void _startHideControlsTimer() {
+    _hideControlsTimer?.cancel();
+    _hideControlsTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) {
+        setState(() => _showControls = false);
+      }
+    });
+  }
+
+  void _handleMouseMove() {
+    setState(() => _showControls = true);
+    _startHideControlsTimer();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: EdgeInsets.zero,
-      child: Container(
-        width: MediaQuery.of(context).size.width * 0.8,
-        height: MediaQuery.of(context).size.height * 0.8,
-        decoration: BoxDecoration(
-          color: Colors.black,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
+      child: MouseRegion(
+        onHover: (_) => _handleMouseMove(),
+        child: Container(
+          width: MediaQuery.of(context).size.width * 0.8,
+          height: MediaQuery.of(context).size.height * 0.8,
+          decoration: BoxDecoration(
+            color: Colors.black,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Stack(
+            children: [
+              // Video player
+              Column(
                 children: [
                   Expanded(
-                    child: Text(
-                      widget.title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                    child: ClipRRect(
+                      borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+                      child: Video(
+                        controller: controller,
+                        subtitleViewConfiguration: _subtitleConfig,
                       ),
-                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.settings, color: Colors.white),
-                    onPressed: _showSettingsDialog,
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white),
-                    onPressed: () => Navigator.pop(context),
                   ),
                 ],
               ),
-            ),
-            Expanded(
-              child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
-                child: Video(
-                  controller: controller,
-                  subtitleViewConfiguration: _subtitleConfig,
+              // Kontrol paneli
+              if (_showControls)
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Colors.black54, Colors.transparent],
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            widget.title,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.settings, color: Colors.white),
+                          onPressed: _showSettingsDialog,
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, color: Colors.white),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -927,6 +969,7 @@ class _VideoPlayerDialogState extends State<VideoPlayerDialog> {
 
   @override
   void dispose() {
+    _hideControlsTimer?.cancel();
     _sleepTimer?.cancel();
     _remainingTimeTimer?.cancel();
     if (!widget.isLiveStream) {
