@@ -6,9 +6,92 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 class SetupService {
-  Shell shell = Shell();
+  Shell? shell;
   final String apiRepo = 'https://github.com/keyiflerolsun/KekikStreamAPI.git';
   
+  Future<Shell> initializeShell() async {
+    if (Platform.isLinux) {
+      // pkexec veya gksudo kontrolü
+      final hasPkexec = await _checkCommand('pkexec');
+      final hasGksudo = await _checkCommand('gksudo');
+      
+      if (hasPkexec || hasGksudo) {
+        shell = Shell(runInShell: true, commandVerbose: true);
+      } else {
+        // Yetki yöneticisi yoksa kur
+        try {
+          print('Yetki yöneticisi kuruluyor...');
+          final tempShell = Shell(runInShell: true);
+          await tempShell.run('sudo apt-get update');
+          await tempShell.run('sudo apt-get install -y pkexec');
+          shell = Shell(runInShell: true, commandVerbose: true);
+        } catch (e) {
+          print('Yetki yöneticisi kurulum hatası: $e');
+          rethrow;
+        }
+      }
+    } else {
+      shell = Shell();
+    }
+    return shell!;
+  }
+
+  Future<bool> _checkCommand(String command) async {
+    try {
+      final result = await Process.run('which', [command]);
+      return result.exitCode == 0;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<void> setupLinuxDependencies() async {
+    if (!Platform.isLinux) return;
+
+    try {
+      print('Linux bağımlılıkları kuruluyor...');
+      
+      // Shell'i başlat ve değerini al
+      shell = await initializeShell();
+
+      // Paket yöneticisini güncelle
+      await _runWithElevation('apt-get update');
+
+      // Gerekli paketleri kur
+      final packages = [
+        'git',
+        'python3',
+        'python3-pip',
+        'python3-venv'
+      ];
+
+      for (final package in packages) {
+        print('$package kuruluyor...');
+        await _runWithElevation('apt-get install -y $package');
+      }
+
+      print('Linux bağımlılıkları kuruldu.');
+    } catch (e) {
+      print('Linux bağımlılıkları kurulum hatası: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> _runWithElevation(String command) async {
+    try {
+      if (await _checkCommand('pkexec')) {
+        await shell!.run('pkexec $command');
+      } else if (await _checkCommand('gksudo')) {
+        await shell!.run('gksudo $command');
+      } else {
+        await shell!.run('sudo $command');
+      }
+    } catch (e) {
+      print('Komut çalıştırma hatası ($command): $e');
+      rethrow;
+    }
+  }
+
   Future<bool> isPythonInstalled() async {
     try {
       if (Platform.isWindows) {
@@ -97,9 +180,7 @@ class SetupService {
         rethrow;
       }
     } else if (Platform.isLinux) {
-      shell = Shell();
-      await shell.run('sudo apt-get update');
-      await shell.run('sudo apt-get install -y python3 python3-pip');
+      await setupLinuxDependencies();
     }
   }
 
@@ -116,8 +197,8 @@ class SetupService {
     if (Platform.isLinux) {
       try {
         print('Git yükleniyor...');
-        await shell.run('sudo apt-get update');
-        await shell.run('sudo apt-get install -y git');
+        await shell!.run('sudo apt-get update');
+        await shell!.run('sudo apt-get install -y git');
         print('Git kurulumu tamamlandı!');
       } catch (e) {
         print('Git kurulum hatası: $e');
@@ -173,132 +254,51 @@ class SetupService {
 
   Future<void> setupAPI() async {
     try {
-      final appDir = await getApplicationDocumentsDirectory();
-      final apiPath = '${appDir.path}/KekikStreamAPI';
+      // Shell'i başlat ve değerini al
+      shell = await initializeShell();
 
-      print('API kurulumu başlıyor...');
-      print('Çalışma dizini: $apiPath');
-
-      // Git kontrolü
-      if (!await isGitInstalled()) {
-        print('Git yüklü değil, yükleniyor...');
-        await installGit();
+      if (Platform.isLinux) {
+        await setupLinuxDependencies();
       }
 
-      bool shouldUpdate = true;
-
-      // API klasörü kontrolü ve oluşturma
+      final appDir = await getApplicationDocumentsDirectory();
+      final apiPath = '${appDir.path}/KekikStreamAPI';
+      
+      // API klasörünü oluştur
       final apiDir = Directory(apiPath);
       if (!await apiDir.exists()) {
         await apiDir.create(recursive: true);
       }
 
-      // Eğer API klasörü varsa, güncelleme kontrolü yap
-      if (await Directory('$apiPath/.git').exists()) {
-        shouldUpdate = await checkApiUpdates(apiPath);
+      // Git clone işlemi
+      print('API indiriliyor...');
+      final cloneResult = await shell!.run('git clone $apiRepo $apiPath');
+      if (cloneResult.any((result) => result.exitCode != 0)) {
+        throw Exception('Git clone hatası: ${cloneResult.map((r) => r.stderr).join('\n')}');
       }
 
-      if (shouldUpdate) {
-        // Önce çalışan Python işlemlerini sonlandır
-        await killPythonProcesses();
+      // Python sanal ortam oluştur
+      if (Platform.isLinux) {
+        final venvPath = '$apiPath/venv';
+        await shell!.run('python3 -m venv $venvPath');
         
-        // Klasörü temizle
-        if (await Directory(apiPath).exists()) {
-          print('Eski API siliniyor...');
-          await Directory(apiPath).delete(recursive: true);
-          await Directory(apiPath).create(recursive: true);
-        }
-      
-        print('GitHub\'dan API indiriliyor...');
-        
-        // Git clone işlemini shell üzerinden yap
-        if (Platform.isLinux) {
-          try {
-            await shell.cd(appDir.path);
-            await shell.run('git clone $apiRepo KekikStreamAPI');
-          } catch (e) {
-            print('Linux git clone hatası: $e');
-            // Alternatif yöntem dene
-            var result = await Process.run('git', 
-              ['clone', apiRepo, apiPath],
-              workingDirectory: appDir.path,
-              runInShell: true
-            );
-            if (result.exitCode != 0) {
-              throw Exception('Git clone hatası: ${result.stderr}');
-            }
-          }
-        } else {
-          var result = await Process.run('git', ['clone', apiRepo, apiPath]);
-          if (result.exitCode != 0) {
-            throw Exception('Git clone hatası: ${result.stderr}');
-          }
-        }
+        // Sanal ortamı aktive et ve paketleri kur
+        final pipResult = await shell!.run('''
+          source $venvPath/bin/activate &&
+          pip install --upgrade pip &&
+          cd $apiPath &&
+          pip install -r requirements.txt
+        ''');
 
-        print('API indirildi: $apiPath');
-
-        // Python paketlerini kur
-        final pythonPath = Platform.isWindows ? 'C:\\Python311\\python.exe' : 'python3';
-        final pipPath = Platform.isWindows ? 'C:\\Python311\\Scripts\\pip.exe' : 'pip3';
-
-        print('Python paketleri kuruluyor...');
-        
-        if (Platform.isLinux) {
-          try {
-            await shell.cd(apiPath);
-            // pip yüklü değilse yükle
-            await shell.run('sudo apt-get install -y python3-pip');
-            // requirements.txt dosyasını kontrol et
-            if (await File('$apiPath/requirements.txt').exists()) {
-              await shell.run('pip3 install --user -r requirements.txt');
-            } else {
-              throw Exception('requirements.txt dosyası bulunamadı');
-            }
-          } catch (e) {
-            print('Linux paket kurulum hatası: $e');
-            rethrow;
-          }
-        } else {
-          // Windows için mevcut kod
-          if (Platform.isWindows) {
-            // Önce pip'i güncelleyelim
-            var result = await Process.run(pythonPath, ['-m', 'ensurepip', '--upgrade']);
-            if (result.exitCode != 0) {
-              throw Exception('Pip yükseltme hatası: ${result.stderr}');
-            }
-  
-            result = await Process.run(pythonPath, ['-m', 'pip', 'install', '--upgrade', 'pip']);
-            if (result.exitCode != 0) {
-              throw Exception('Pip yükseltme hatası: ${result.stderr}');
-            }
-  
-            // requirements.txt dosyasının varlığını kontrol et
-            final requirementsFile = File('$apiPath/requirements.txt');
-            if (!await requirementsFile.exists()) {
-              throw Exception('requirements.txt dosyası bulunamadı: ${requirementsFile.path}');
-            }
-  
-            // Paketleri kur
-            result = await Process.run(
-              pipPath,
-              ['install', '-r', 'requirements.txt'],
-              workingDirectory: apiPath,
-              runInShell: true
-            );
-            
-            if (result.exitCode != 0) {
-              throw Exception('Paket kurulum hatası: ${result.stderr}');
-            }
-          }
+        if (pipResult.any((result) => result.exitCode != 0)) {
+          throw Exception('Pip kurulum hatası: ${pipResult.map((r) => r.stderr).join('\n')}');
         }
-        
-        print('API kurulumu tamamlandı!');
-      } else {
-        print('API zaten güncel, kurulum atlanıyor.');
       }
+
+      print('API kurulumu tamamlandı!');
 
     } catch (e) {
-      print('API kurulumunda hata: $e');
+      print('API kurulum hatası: $e');
       rethrow;
     }
   }
@@ -359,7 +359,8 @@ class SetupService {
   Future<Process> startAPI() async {
     final appDir = await getApplicationDocumentsDirectory();
     final apiPath = '${appDir.path}/KekikStreamAPI';
-    
+    final venvPath = '$apiPath/venv';
+
     print('API başlatılıyor...');
     if (Platform.isWindows) {
       await killPythonProcesses();
@@ -396,9 +397,13 @@ class SetupService {
       return process;
     } else {
       return await Process.start(
-        'python3',
+        '$venvPath/bin/python3',
         ['basla.py'],
         workingDirectory: apiPath,
+        environment: {
+          'PYTHONIOENCODING': 'utf-8',
+          'PATH': Platform.environment['PATH']!
+        }
       );
     }
   }
