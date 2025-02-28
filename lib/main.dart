@@ -1,6 +1,5 @@
 import 'dart:ui' show PlatformDispatcher;
 import 'package:ShadeBox/pages/sinewix_tv_page.dart';
-import 'package:ShadeBox/widgets/loading_overlay.dart';
 import 'package:flutter/material.dart';
 import 'package:flex_color_scheme/flex_color_scheme.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -49,115 +48,12 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   ThemeMode _themeMode = ThemeMode.system;
   FlexScheme _colorScheme = FlexScheme.blueM3;
-  bool _isInitialized = false;
-  List<String> _initMessages = [];
-  double _initProgress = 0.0;
+  bool _isInitialized = true; // Changed to true since we don't need initialization anymore
 
   @override
   void initState() {
     super.initState();
-    _initializeApp();
     _loadThemePreferences();
-  }
-
-  Future<void> _initializeApp() async {
-    if (_isInitialized) return;
-
-    setState(() {
-      _initMessages = ['Uygulama başlatılıyor...'];
-      _initProgress = 0.1;
-    });
-
-    if (Platform.isWindows) {
-      // Python kontrolü ve kurulumu
-      if (!await _isPythonInstalled()) {
-        setState(() {
-          _initMessages.add('Python kuruluyor...');
-          _initProgress = 0.3;
-        });
-        await _installPython();
-      }
-
-      setState(() {
-        _initMessages.add('KekikStream kuruluyor...');
-        _initProgress = 0.6;
-      });
-      
-      await _runCommand('python.exe -m pip install -U KekikStream');
-    } else if (Platform.isLinux) {
-      setState(() {
-        _initMessages.add('KekikStream kuruluyor...');
-        _initProgress = 0.6;
-      });
-      
-      await _runCommand('/usr/bin/python3 -m pip install -U KekikStream');
-    }
-
-    setState(() {
-      _initMessages.add('API başlatılıyor...');
-      _initProgress = 0.8;
-    });
-
-    await _startAndWaitForAPI();
-
-    setState(() {
-      _isInitialized = true;
-      _initProgress = 1.0;
-    });
-  }
-
-  Future<bool> _isPythonInstalled() async {
-    try {
-      final result = await Process.run('python', ['--version']);
-      return result.exitCode == 0;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  Future<void> _installPython() async {
-    final tempDir = await getTemporaryDirectory();
-    final installerPath = '${tempDir.path}\\python_installer.exe';
-    
-    // Python installer'ı indir
-    final response = await http.get(
-      Uri.parse('https://www.python.org/ftp/python/3.13.2/python-3.13.2-amd64.exe')
-    );
-    
-    await File(installerPath).writeAsBytes(response.bodyBytes);
-    
-    // Sessiz kurulum
-    await Process.run(
-      installerPath,
-      ['/quiet', 'InstallAllUsers=1', 'PrependPath=1']
-    );
-  }
-
-  Future<void> _runCommand(String command) async {
-    final parts = command.split(' ');
-    await Process.run(parts.first, parts.skip(1).toList());
-  }
-
-  Future<void> _startAndWaitForAPI() async {
-    // API'yi başlat
-    if (Platform.isWindows) {
-      Process.run('python.exe', ['-m', 'KekikStream']);
-    } else {
-      Process.run('/usr/bin/python3', ['-m', 'KekikStream']);
-    }
-
-    // API hazır olana kadar bekle
-    bool apiReady = false;
-    while (!apiReady) {
-      try {
-        final response = await http.get(Uri.parse('http://127.0.0.1:3310/api/v1'));
-        if (response.statusCode == 200) {
-          apiReady = true;
-        }
-      } catch (e) {
-        await Future.delayed(const Duration(seconds: 1));
-      }
-    }
   }
 
   Future<void> _loadThemePreferences() async {
@@ -232,19 +128,12 @@ class _MyAppState extends State<MyApp> {
         useMaterial3: true,
         fontFamily: GoogleFonts.roboto().fontFamily,
       ),
-      home: !_isInitialized
-          ? Scaffold(
-              body: LoadingOverlay(
-                messages: _initMessages,
-                progress: _initProgress,
-              ),
-            )
-          : HomePage(
-              updateThemeMode: updateThemeMode,
-              updateColorScheme: updateColorScheme,
-              currentThemeMode: _themeMode,
-              currentColorScheme: _colorScheme,
-            ),
+      home: HomePage(
+        updateThemeMode: updateThemeMode,
+        updateColorScheme: updateColorScheme,
+        currentThemeMode: _themeMode,
+        currentColorScheme: _colorScheme,
+      ),
     );
   }
 }
