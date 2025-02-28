@@ -1,5 +1,6 @@
 import 'dart:ui' show PlatformDispatcher;
 import 'package:ShadeBox/pages/sinewix_tv_page.dart';
+import 'package:ShadeBox/widgets/loading_overlay.dart';
 import 'package:flutter/material.dart';
 import 'package:flex_color_scheme/flex_color_scheme.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -12,24 +13,19 @@ import 'package:media_kit/media_kit.dart';
 import 'package:flutter/services.dart';
 import 'dart:io';
 import 'package:window_manager/window_manager.dart';
-import 'package:loading_overlay/loading_overlay.dart';
-import 'services/setup_service.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
   
-  final setupService = SetupService();
-  
-  // Pencereyi ortala
-  if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+  if (Platform.isWindows || Platform.isLinux) {
     await windowManager.ensureInitialized();
     
     WindowOptions windowOptions = WindowOptions(
       size: Size(1280, 720),
       minimumSize: Size(1280, 720),
-      maximumSize: Size(1920, 1080),
       center: true,
       title: 'ShadeBox',
     );
@@ -40,13 +36,11 @@ void main() async {
     });
   }
   
-  runApp(MyApp(setupService: setupService));
+  runApp(const MyApp());
 }
 
 class MyApp extends StatefulWidget {
-  final SetupService setupService;
-  
-  const MyApp({super.key, required this.setupService});
+  const MyApp({super.key});
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -55,58 +49,114 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   ThemeMode _themeMode = ThemeMode.system;
   FlexScheme _colorScheme = FlexScheme.blueM3;
-  bool _isLoading = true;
-  String _loadingMessage = 'Sistem kontrol ediliyor...';
-  Process? _apiProcess;
+  bool _isInitialized = false;
+  List<String> _initMessages = [];
+  double _initProgress = 0.0;
 
   @override
   void initState() {
     super.initState();
+    _initializeApp();
     _loadThemePreferences();
-    _initializeSystem();
   }
 
-  @override
-  void dispose() {
-    // API processini temizle
-    _apiProcess?.kill();
-    super.dispose();
-  }
+  Future<void> _initializeApp() async {
+    if (_isInitialized) return;
 
-  Future<void> _initializeSystem() async {
-    try {
-      setState(() => _loadingMessage = 'Python kontrolü yapılıyor...');
-      if (!await widget.setupService.isPythonInstalled()) {
-        setState(() => _loadingMessage = 'Python kurulumu başlatılıyor...');
-        await widget.setupService.installPython();
-        setState(() => _loadingMessage = 'Python kurulumu tamamlanıyor...');
-        await widget.setupService.waitForPythonInstallation();
+    setState(() {
+      _initMessages = ['Uygulama başlatılıyor...'];
+      _initProgress = 0.1;
+    });
+
+    if (Platform.isWindows) {
+      // Python kontrolü ve kurulumu
+      if (!await _isPythonInstalled()) {
+        setState(() {
+          _initMessages.add('Python kuruluyor...');
+          _initProgress = 0.3;
+        });
+        await _installPython();
       }
 
-      setState(() => _loadingMessage = 'API indiriliyor...');
-      await widget.setupService.setupAPI();
-
-      setState(() => _loadingMessage = 'API başlatılıyor...');
-      _apiProcess = await widget.setupService.startAPI();
-
       setState(() {
-        _loadingMessage = 'Sistem hazır!';
-        _isLoading = false;
+        _initMessages.add('KekikStream kuruluyor...');
+        _initProgress = 0.6;
       });
       
-    } catch (e, stackTrace) {
+      await _runCommand('python.exe -m pip install -U KekikStream');
+    } else if (Platform.isLinux) {
       setState(() {
-        _loadingMessage = '''Hata oluştu:
-$e
-
-API Çıktıları için konsolu kontrol edin.
-Lütfen uygulamayı yeniden başlatın.''';
-        _isLoading = true;
+        _initMessages.add('KekikStream kuruluyor...');
+        _initProgress = 0.6;
       });
-      print('Hata detayı:');
-      print(e);
-      print('Stack trace:');
-      print(stackTrace);
+      
+      await _runCommand('/usr/bin/python3 -m pip install -U KekikStream');
+    }
+
+    setState(() {
+      _initMessages.add('API başlatılıyor...');
+      _initProgress = 0.8;
+    });
+
+    await _startAndWaitForAPI();
+
+    setState(() {
+      _isInitialized = true;
+      _initProgress = 1.0;
+    });
+  }
+
+  Future<bool> _isPythonInstalled() async {
+    try {
+      final result = await Process.run('python', ['--version']);
+      return result.exitCode == 0;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<void> _installPython() async {
+    final tempDir = await getTemporaryDirectory();
+    final installerPath = '${tempDir.path}\\python_installer.exe';
+    
+    // Python installer'ı indir
+    final response = await http.get(
+      Uri.parse('https://www.python.org/ftp/python/3.13.2/python-3.13.2-amd64.exe')
+    );
+    
+    await File(installerPath).writeAsBytes(response.bodyBytes);
+    
+    // Sessiz kurulum
+    await Process.run(
+      installerPath,
+      ['/quiet', 'InstallAllUsers=1', 'PrependPath=1']
+    );
+  }
+
+  Future<void> _runCommand(String command) async {
+    final parts = command.split(' ');
+    await Process.run(parts.first, parts.skip(1).toList());
+  }
+
+  Future<void> _startAndWaitForAPI() async {
+    // API'yi başlat
+    if (Platform.isWindows) {
+      Process.run('python.exe', ['-m', 'KekikStream']);
+    } else {
+      Process.run('/usr/bin/python3', ['-m', 'KekikStream']);
+    }
+
+    // API hazır olana kadar bekle
+    bool apiReady = false;
+    while (!apiReady) {
+      try {
+        final response = await http.get(Uri.parse('http://127.0.0.1:3310/api/v1'));
+        if (response.statusCode == 200) {
+          apiReady = true;
+        }
+      } catch (e) {
+        await Future.delayed(const Duration(seconds: 1));
+      }
     }
   }
 
@@ -152,7 +202,6 @@ Lütfen uygulamayı yeniden başlatın.''';
 
   @override
   Widget build(BuildContext context) {
-    // ThemeMode değişikliğini algılamak için
     _updateSystemChrome(_themeMode, context);
 
     return MaterialApp(
@@ -183,65 +232,19 @@ Lütfen uygulamayı yeniden başlatın.''';
         useMaterial3: true,
         fontFamily: GoogleFonts.roboto().fontFamily,
       ),
-      home: Stack(
-        children: [
-          HomePage(
-            updateThemeMode: updateThemeMode,
-            updateColorScheme: updateColorScheme,
-            currentThemeMode: _themeMode,
-            currentColorScheme: _colorScheme,
-          ),
-          if (_isLoading)
-            Container(
-              color: Colors.black.withOpacity(0.85),
-              child: Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
-                        blurRadius: 10,
-                        spreadRadius: 2,
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const SizedBox(
-                        width: 40,
-                        height: 40,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 3,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      Text(
-                        _loadingMessage,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                          shadows: [
-                            Shadow(
-                              color: Colors.black54,
-                              blurRadius: 4,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+      home: !_isInitialized
+          ? Scaffold(
+              body: LoadingOverlay(
+                messages: _initMessages,
+                progress: _initProgress,
               ),
+            )
+          : HomePage(
+              updateThemeMode: updateThemeMode,
+              updateColorScheme: updateColorScheme,
+              currentThemeMode: _themeMode,
+              currentColorScheme: _colorScheme,
             ),
-        ],
-      ),
     );
   }
 }
@@ -311,12 +314,12 @@ class _HomePageState extends State<HomePage> {
                         _pages.length,
                         (index) => _buildTabItem(
                           index: index,
-                          title: ['Film', 'Dizi', 'Anime', 'Canlı TV'][index], // TV sekmesini ekleyin
+                          title: ['Film', 'Dizi', 'Anime', 'Canlı TV'][index],
                           icon: [
                             HugeIcons.strokeRoundedVideo01, 
                             HugeIcons.strokeRoundedVideoReplay,
                             HugeIcons.strokeRoundedTongue,
-                            HugeIcons.strokeRoundedTv01 // TV ikonu ekleyin
+                            HugeIcons.strokeRoundedTv01
                           ][index],
                         ),
                       ),
