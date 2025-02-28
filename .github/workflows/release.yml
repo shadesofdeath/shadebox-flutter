@@ -135,6 +135,21 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Önceki release'leri silme adımı
+      - name: Delete Previous Releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          releases=$(gh api repos/${{ github.repository }}/releases --paginate | jq -r '.[].id')
+          for release_id in $releases; do
+            gh api -X DELETE repos/${{ github.repository }}/releases/$release_id
+          done
+          
+          # Varsa tüm etiketleri de sil
+          git fetch --tags
+          git tag | xargs -r git push --delete origin
+          git tag | xargs -r git tag -d
+
       - name: Get tag name
         id: get_tag
         run: |
