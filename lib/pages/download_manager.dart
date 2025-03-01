@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:ShadeBox/utils/m3u8_downloader.dart';
 import 'package:ShadeBox/utils/mediafire_extractor.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -74,81 +75,124 @@ class DownloadManager {
       task.status = 'İndirme başlatılıyor...';
       _notifyListeners();
 
-      // Mediafire link kontrolü ekle
-      String downloadUrl = url;
-      if (MediafireExtractor.isMediafireUrl(url)) {
-        task.status = 'Mediafire linki çözümleniyor...';
-        _notifyListeners();
+      if (url.toLowerCase().contains('.m3u8')) {
+        await M3U8Downloader.downloadSegments(
+          m3u8Url: url,
+          outputPath: savePath,
+          onProgress: (progress) {
+            task.progress = progress;
+            _notifyListeners();
+          },
+          onStatus: (status, downloaded, total) {
+            task.status = status;
+            task.downloadedSize = downloaded;
+            task.totalSize = total;
+            _notifyListeners();
+          },
+        );
         
-        final directUrl = await MediafireExtractor.extractDirectUrl(url);
-        if (directUrl != null) {
-          downloadUrl = directUrl;
-        } else {
-          task.downloadStatus = DownloadStatus.failed;
-          task.status = 'Mediafire linki çözümlenemedi';
-          _notifyListeners();
-          return;
-        }
-      }
-
-      final response = await _dio.get(
-        downloadUrl, // url yerine downloadUrl kullan
-        cancelToken: task.cancelToken,
-        options: Options(
-          responseType: ResponseType.stream,
-          followRedirects: true,
-          validateStatus: (status) => status! < 500,
-        ),
-      );
-
-      final file = File(savePath);
-      final sink = file.openWrite();
-
-      int received = 0;
-      int total = int.parse(response.headers.value('content-length') ?? '-1');
-      DateTime lastUpdateTime = DateTime.now();
-      int lastBytes = 0;
-
-      await for (final chunk in response.data.stream) {
-        if (task.cancelToken.isCancelled) break;
-        
-        sink.add(chunk);
-        received += (chunk.length as int); // chunk.length'i int'e cast et
-
-        final now = DateTime.now();
-        final duration = now.difference(lastUpdateTime);
-        
-        if (duration.inMilliseconds >= 500) { // Update every 500ms
-          final speed = (received - lastBytes) / duration.inSeconds;
-          
-          task.progress = total != -1 ? received / total : 0;
-          task.downloadedSize = _formatSize(received);
-          task.totalSize = total != -1 ? _formatSize(total) : 'Unknown';
-          task.speed = _formatSpeed(speed);
-          task.status = 'İndiriliyor... ${(task.progress * 100).toStringAsFixed(1)}%';
-          
-          lastUpdateTime = now;
-          lastBytes = received;
-          _notifyListeners();
-        }
-      }
-
-      await sink.flush();
-      await sink.close();
-
-      if (!task.cancelToken.isCancelled) {
         task.downloadStatus = DownloadStatus.completed;
         task.status = 'Tamamlandı';
         task.progress = 1.0;
       } else {
-        task.downloadStatus = DownloadStatus.canceled;
-        task.status = 'İptal edildi';
-        await file.delete();
+        // Normal download code for non-m3u8 files
+        // RecTV'nin gerektirdiği header'ları ekle
+        final options = Options(
+          headers: {
+            'User-Agent': 'googleusercontent',
+            'Referer': 'https://twitter.com/',
+            'Range': 'bytes=0-',
+            'Accept': '*/*',
+            'Connection': 'keep-alive',
+          },
+          followRedirects: true,
+          validateStatus: (status) => status! < 500,
+          responseType: ResponseType.stream,
+          receiveTimeout: const Duration(hours: 2),
+        );
+
+        debugPrint('Starting download with URL: ${task.url}');
+
+        final response = await _dio.get(
+          url,
+          cancelToken: task.cancelToken,
+          options: options,
+          onReceiveProgress: (received, total) {
+            debugPrint('Progress: $received / $total');
+          },
+        );
+
+        if (response.statusCode != 200 && response.statusCode != 206) {
+          throw Exception('Download failed with status: ${response.statusCode}');
+        }
+
+        final file = File(savePath);
+        final sink = file.openWrite();
+
+        int received = 0;
+        int total = int.parse(response.headers.value('content-length') ?? '-1');
+        DateTime lastUpdateTime = DateTime.now();
+        int lastBytes = 0;
+
+        await for (final chunk in response.data.stream) {
+          if (task.cancelToken.isCancelled) break;
+          
+          sink.add(chunk);
+          received += (chunk.length.toInt() as int);
+
+          final now = DateTime.now();
+          final duration = now.difference(lastUpdateTime);
+          
+          if (duration.inMilliseconds >= 500) {
+            final speed = (received - lastBytes) / duration.inSeconds;
+            
+            task.progress = total != -1 ? received / total : 0;
+            task.downloadedSize = _formatSize(received);
+            task.totalSize = total != -1 ? _formatSize(total) : 'Unknown';
+            task.speed = _formatSpeed(speed);
+            task.status = 'İndiriliyor... ${(task.progress * 100).toStringAsFixed(1)}%';
+            
+            lastUpdateTime = now;
+            lastBytes = received;
+            _notifyListeners();
+          }
+        }
+
+        await sink.flush();
+        await sink.close();
+
+        // Dosya boyutunu kontrol et
+        final fileSize = await file.length();
+        if (fileSize == 0) {
+          throw Exception('Downloaded file is empty');
+        }
+
+        if (!task.cancelToken.isCancelled) {
+          task.downloadStatus = DownloadStatus.completed;
+          task.status = 'Tamamlandı';
+          task.progress = 1.0;
+          debugPrint('Download completed successfully. File size: ${_formatSize(fileSize)}');
+        } else {
+          task.downloadStatus = DownloadStatus.canceled;
+          task.status = 'İptal edildi';
+          await file.delete();
+        }
       }
 
     } catch (e) {
+      debugPrint('Download error: $e');
       task.downloadStatus = DownloadStatus.failed;
       task.status = 'Hata: ${e.toString()}';
+      
+      // Hatalı dosyayı temizle
+      try {
+        final file = File(savePath);
+        if (await file.exists()) {
+          await file.delete();
+        }
+      } catch (e) {
+        debugPrint('Error deleting failed download: $e');
+      }
     } finally {
       _notifyListeners();
     }

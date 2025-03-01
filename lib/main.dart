@@ -1,4 +1,5 @@
 import 'dart:ui' show PlatformDispatcher, ImageFilter;
+import 'package:ShadeBox/pages/rec_tv_page.dart';
 import 'package:ShadeBox/pages/sinewix_tv_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flex_color_scheme/flex_color_scheme.dart';
@@ -8,16 +9,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'pages/sinewix_film_page.dart';
 import 'pages/sinewix_dizi_page.dart';
 import 'pages/sinewix_anime_page.dart';
-import 'pages/film_makinesi_page.dart'; // Add this import
 import 'package:media_kit/media_kit.dart';
 import 'package:flutter/services.dart';
 import 'dart:io';
 import 'package:window_manager/window_manager.dart';
-import 'package:http/http.dart' as http;
-import 'package:path_provider/path_provider.dart';
-import 'package:process_run/process_run.dart';
-import 'package:path/path.dart' as path;
-import 'package:dio/dio.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -37,235 +32,7 @@ void main() async {
     });
   }
 
-  runApp(const SetupWrapper());
-}
-
-class SetupWrapper extends StatefulWidget {
-  const SetupWrapper({super.key});
-
-  @override
-  State<SetupWrapper> createState() => _SetupWrapperState();
-}
-
-class _SetupWrapperState extends State<SetupWrapper> {
-  bool isLoading = true;
-  String statusMessage = 'Başlatılıyor...';
-  double progress = 0.0;
-  int? apiProcessId; // API işlem kimliğini saklamak için yeni değişken
-
-  @override
-  void initState() {
-    super.initState();
-    _initializeApp();
-  }
-
-  Future<void> _initializeApp() async {
-    try {
-      // Python kontrolü ve kurulumu
-      if (Platform.isWindows) {
-        bool pythonInstalled = await _checkPythonInstalled();
-        if (!pythonInstalled) {
-          setState(() {
-            statusMessage = 'Python yükleniyor...';
-            progress = 0.2;
-          });
-          await _installPython();
-        }
-      }
-
-      // KekikStream kurulumu
-      setState(() {
-        statusMessage = 'Eklentiler yükleniyor...';
-        progress = 0.5;
-      });
-      await _installKekikStream();
-
-      // API başlatma
-      setState(() {
-        statusMessage = 'API başlatılıyor...';
-        progress = 0.8;
-      });
-      await _startAndCheckAPI();
-
-      setState(() {
-        isLoading = false;
-        progress = 1.0;
-      });
-    } catch (e) {
-      setState(() {
-        statusMessage = 'Hata: $e';
-      });
-    }
-  }
-
-  Future<bool> _checkPythonInstalled() async {
-    try {
-      var shell = Shell();
-      await shell.run('python --version');
-      return true;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  Future<void> _installPython() async {
-    final tempDir = await getTemporaryDirectory();
-    final installerPath = path.join(tempDir.path, 'python_installer.exe');
-    
-    // Python installer'ı indir
-    final response = await Dio().download(
-      'https://www.python.org/ftp/python/3.13.2/python-3.13.2-amd64.exe',
-      installerPath,
-    );
-
-    // Sessiz kurulum
-    var shell = Shell();
-    await shell.run('''
-      $installerPath /quiet InstallAllUsers=1 PrependPath=1 Include_test=0
-    ''');
-  }
-
-  Future<void> _installKekikStream() async {
-    var shell = Shell();
-    if (Platform.isWindows) {
-      await shell.run('python -m pip install -U KekikStream');
-    } else if (Platform.isLinux) {
-      await shell.run('/usr/bin/python3 -m pip install -U KekikStream');
-    }
-  }
-
-  Future<void> _startAndCheckAPI() async {
-    try {
-      if (Platform.isWindows) {
-        final tempDir = await getTemporaryDirectory();
-        final batPath = path.join(tempDir.path, 'start_api.bat');
-        final vbsPath = path.join(tempDir.path, 'run_hidden.vbs');
-        
-        // BAT dosyası oluştur
-        await File(batPath).writeAsString('''
-@echo off
-chcp 65001 >nul
-KekikStreamAPI
-''');
-
-        // VBScript dosyası oluştur (CMD'yi gizlemek için)
-        await File(vbsPath).writeAsString('''
-CreateObject("WScript.Shell").Run """${batPath.replaceAll(r'\', r'\\')}""", 0, false
-''');
-
-        // VBScript'i çalıştır (gizli mod)
-        final process = await Process.start(
-          'wscript.exe',
-          [vbsPath],
-          mode: ProcessStartMode.detached
-        );
-        apiProcessId = process.pid;
-      } else {
-        // Linux için normal başlatma
-        final process = await Process.start('KekikStreamAPI', [], mode: ProcessStartMode.detached);
-        apiProcessId = process.pid;
-      }
-
-      // API'nin başlamasını bekle
-      bool apiRunning = false;
-      int attempts = 0;
-      while (!apiRunning && attempts < 30) {
-        try {
-          final response = await Dio().get('http://127.0.0.1:3310/api/v1/get_plugin_names');
-          if (response.statusCode == 200) {
-            apiRunning = true;
-            print('API başarıyla başlatıldı!');
-            break;
-          }
-        } catch (e) {
-          await Future.delayed(Duration(seconds: 1));
-          attempts++;
-        }
-      }
-      
-      if (!apiRunning) {
-        throw Exception('API başlatılamadı');
-      }
-    } catch (e) {
-      print('API başlatma hatası: $e');
-      rethrow;
-    }
-  }
-
-  @override
-  void dispose() {
-    // API işlemini sonlandır
-    if (apiProcessId != null) {
-      try {
-        if (Platform.isWindows) {
-          Process.runSync('taskkill', ['/F', '/T', '/PID', apiProcessId.toString()]);
-        } else {
-          Process.runSync('kill', ['-9', apiProcessId.toString()]);
-        }
-      } catch (e) {
-        print('API sonlandırma hatası: $e');
-      }
-    }
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      home: Stack(
-        children: [
-          const MyApp(),
-          if (isLoading)
-            BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-              child: Container(
-                color: Colors.black.withOpacity(0.6),
-                child: Center(
-                  child: Card(
-                    elevation: 8,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Container(
-                      width: 300,
-                      padding: EdgeInsets.all(24),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 200,
-                            height: 6,
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: LinearProgressIndicator(
-                                value: progress,
-                                backgroundColor: Colors.grey.withOpacity(0.3),
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Theme.of(context).colorScheme.primary,
-                                ),
-                              ),
-                            ),
-                          ),
-                          SizedBox(height: 20),
-                          Text(
-                            statusMessage,
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
+  runApp(const MyApp());
 }
 
 class MyApp extends StatefulWidget {
@@ -393,8 +160,8 @@ class _HomePageState extends State<HomePage> {
     SinewixFilmPage(),
     SinewixDiziPage(),
     SinewixAnimePage(),
-    FilmMakinesiPage(), // Add the new page
     SinewixTVPage(),
+    RecTVPage(),
   ];
 
   @override
@@ -434,13 +201,14 @@ class _HomePageState extends State<HomePage> {
                         _pages.length,
                         (index) => _buildTabItem(
                           index: index,
-                          title: ['Film', 'Dizi', 'Anime', 'Film Makinesi', 'Canlı TV'][index], // Update titles
+                          title: ['Film', 'Dizi', 'Anime', 'Canlı TV', 'RecTV'][index], // Add RecTV title
                           icon: [
                             HugeIcons.strokeRoundedVideo01, 
                             HugeIcons.strokeRoundedVideoReplay,
                             HugeIcons.strokeRoundedTongue,
                             HugeIcons.strokeRoundedPlayCircle, // Add new icon
-                            HugeIcons.strokeRoundedTv01
+                            HugeIcons.strokeRoundedTv01,
+                            HugeIcons.strokeRoundedPlayCircle, // Add RecTV icon
                           ][index],
                         ),
                       ),

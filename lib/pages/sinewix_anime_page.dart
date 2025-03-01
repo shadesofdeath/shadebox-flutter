@@ -346,7 +346,7 @@ class _SinewixAnimePageState extends State<SinewixAnimePage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Padding(
-          padding: EdgeInsets.only(left: 16, top: 16, bottom: 8),
+          padding: EdgeInsets.only(left: 16, bottom: 8), // top padding'i kaldırdık
           child: Text(
             'Son İzlenenler',
             style: TextStyle(
@@ -356,7 +356,7 @@ class _SinewixAnimePageState extends State<SinewixAnimePage> {
           ),
         ),
         SizedBox(
-          height: 240,
+          height: 220, // yüksekliği azalttık (240->220)
           child: PageView.builder(
             controller: _recentShowsController,
             onPageChanged: (page) {
@@ -380,7 +380,89 @@ class _SinewixAnimePageState extends State<SinewixAnimePage> {
                 itemCount: pageShows.length,
                 itemBuilder: (context, index) {
                   final show = pageShows[index];
-                  return _buildShowCard(show);
+                  return Card(
+                    elevation: 0,
+                    color: Theme.of(context).colorScheme.surface,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: BorderSide(
+                        color: Theme.of(context).colorScheme.outline.withOpacity(0.1),
+                        width: 1,
+                      ),
+                    ),
+                    child: InkWell(
+                      onTap: () => _showTVDetails(show),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                ClipRRect(
+                                  borderRadius: const BorderRadius.vertical(
+                                    top: Radius.circular(8),
+                                  ),
+                                  child: Image.network(
+                                    show.posterPath,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) =>
+                                        const Icon(Icons.error, size: 20),
+                                  ),
+                                ),
+                                Positioned(
+                                  top: 8,
+                                  right: 8,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context).colorScheme.surface.withOpacity(0.8),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(
+                                          HugeIcons.strokeRoundedStar,
+                                          size: 14,
+                                          color: Colors.amber,
+                                        ),
+                                        const SizedBox(width: 2),
+                                        Text(
+                                          show.voteAverage.toStringAsFixed(1),
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: Text(
+                              show.title,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
                 },
               );
             },
@@ -981,7 +1063,10 @@ class _SinewixAnimePageState extends State<SinewixAnimePage> {
               slivers: [
                 // Add recently watched section
                 SliverToBoxAdapter(
-                  child: _buildRecentlyWatchedSection(),
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 8), // Son izlenenler ile grid arasındaki boşluğu azalttık
+                    child: _buildRecentlyWatchedSection(),
+                  ),
                 ),
                 
                 // Existing grid view

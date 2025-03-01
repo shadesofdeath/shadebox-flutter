@@ -52,6 +52,7 @@ dependencies:
   loading_overlay: ^0.4.2
   archive: ^4.0.3
   path: ^1.9.1
+  dio_cache_interceptor: ^3.5.1
 
 flutter_launcher_icons:
   image_path: "assets/app_icon.png"
