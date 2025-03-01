@@ -1,5 +1,5 @@
 import 'dart:ui' show PlatformDispatcher, ImageFilter;
-import 'package:ShadeBox/pages/rec_tv_page.dart';
+import 'package:ShadeBox/pages/rec_tv_film.dart';
 import 'package:ShadeBox/pages/sinewix_tv_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flex_color_scheme/flex_color_scheme.dart';
@@ -13,6 +13,8 @@ import 'package:media_kit/media_kit.dart';
 import 'package:flutter/services.dart';
 import 'dart:io';
 import 'package:window_manager/window_manager.dart';
+import 'package:ShadeBox/pages/rec_tv_series.dart';
+import 'package:ShadeBox/pages/rec_tv_live.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -160,8 +162,10 @@ class _HomePageState extends State<HomePage> {
     SinewixFilmPage(),
     SinewixDiziPage(),
     SinewixAnimePage(),
-    SinewixTVPage(),
     RecTVPage(),
+    RecTVSeriesPage(),
+    RecTVLivePage(), // RecTV Live page eklendi
+    SinewixTVPage(),
   ];
 
   @override
@@ -201,14 +205,23 @@ class _HomePageState extends State<HomePage> {
                         _pages.length,
                         (index) => _buildTabItem(
                           index: index,
-                          title: ['Film', 'Dizi', 'Anime', 'Canlı TV', 'RecTV'][index], // Add RecTV title
+                          title: [
+                            'Film', 
+                            'Dizi', 
+                            'Anime', 
+                            'RecTV Film', 
+                            'RecTV Dizi',
+                            'RecTV Canlı', // Yeni sekme başlığı
+                            'Canlı TV'
+                          ][index],
                           icon: [
-                            HugeIcons.strokeRoundedVideo01, 
+                            HugeIcons.strokeRoundedVideo01,
                             HugeIcons.strokeRoundedVideoReplay,
                             HugeIcons.strokeRoundedTongue,
-                            HugeIcons.strokeRoundedPlayCircle, // Add new icon
+                            HugeIcons.strokeRoundedVideo01,
+                            HugeIcons.strokeRoundedVideoReplay,
+                            HugeIcons.strokeRoundedTv01, // RecTV Live için ikon
                             HugeIcons.strokeRoundedTv01,
-                            HugeIcons.strokeRoundedPlayCircle, // Add RecTV icon
                           ][index],
                         ),
                       ),

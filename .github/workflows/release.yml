@@ -50,7 +50,7 @@ jobs:
         shell: pwsh
         run: |
           $source = "build\windows\x64\runner\Release\*"
-          $destination = "release-builds\windows-release.zip"
+          $destination = "release-builds\ShadeBox-Windows.zip"
           if (Test-Path $source) {
               Compress-Archive -Path $source -DestinationPath $destination -Force
           } else {
@@ -62,7 +62,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows-build
-          path: release-builds/windows-release.zip
+          path: release-builds/ShadeBox-Windows.zip
           if-no-files-found: error
         
   build-linux:
@@ -107,7 +107,7 @@ jobs:
         run: |
           cd build/linux/x64/release/bundle
           # Önce tüm dosyaları zip'le
-          zip -r ../../../../../release-builds/linux-release.zip *
+          zip -r ../../../../../release-builds/ShadeBox-Linux.zip *
           
           # Eğer lib klasörü yoksa oluştur
           mkdir -p lib
@@ -117,14 +117,14 @@ jobs:
           
           # lib klasörünü de zip'e ekle
           if [ -d "lib" ]; then
-            zip -ur ../../../../../release-builds/linux-release.zip lib/
+            zip -ur ../../../../../release-builds/ShadeBox-Linux.zip lib/
           fi
 
       - name: Upload Linux Artifact
         uses: actions/upload-artifact@v4
         with:
           name: linux-build
-          path: release-builds/linux-release.zip
+          path: release-builds/ShadeBox-Linux.zip
           if-no-files-found: error
 
   create-release:
@@ -168,10 +168,10 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.get_tag.outputs.tag }}
-          name: Release ${{ steps.get_tag.outputs.tag }}
+          name: Son Sürüm
           files: |
-            artifacts/windows-build/windows-release.zip
-            artifacts/linux-build/linux-release.zip
+            artifacts/windows-build/ShadeBox-Windows.zip
+            artifacts/linux-build/ShadeBox-Linux.zip
           draft: false
           prerelease: false
         env:
