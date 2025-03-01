@@ -373,194 +373,200 @@ class _RecTVSeriesPageState extends State<RecTVSeriesPage> {
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {
-        return AlertDialog(
-          backgroundColor: Theme.of(context).colorScheme.surface,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          contentPadding: EdgeInsets.zero,
-          content: SizedBox(
-            width: MediaQuery.of(context).size.width * 0.75,
-            height: MediaQuery.of(context).size.height * 0.85,
-            child: Column(
-              children: [
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Stack(
+        return WillPopScope(
+          onWillPop: () async => false,
+          child: GestureDetector(
+            onTap: () {}, // Boş gesture detector arkaya tıklamayı engeller
+            child: AlertDialog(
+              backgroundColor: Theme.of(context).colorScheme.surface,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              contentPadding: EdgeInsets.zero,
+              content: SizedBox(
+                width: MediaQuery.of(context).size.width * 0.75,
+                height: MediaQuery.of(context).size.height * 0.85,
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Image.network(
-                              series.image,
-                              width: double.infinity,
-                              height: 400,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) => 
-                                Container(
-                                  color: Colors.grey[900],
-                                  child: const Icon(
-                                    HugeIcons.strokeRoundedImageNotFound01,
-                                    size: 50,
-                                    color: Colors.white,
+                            Stack(
+                              children: [
+                                Image.network(
+                                  series.image,
+                                  width: double.infinity,
+                                  height: 400,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) => 
+                                    Container(
+                                      color: Colors.grey[900],
+                                      child: const Icon(
+                                        HugeIcons.strokeRoundedImageNotFound01,
+                                        size: 50,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                ),
+                                Positioned.fill(
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topCenter,
+                                        end: Alignment.bottomCenter,
+                                        colors: [
+                                          Colors.transparent,
+                                          Colors.black.withOpacity(0.7),
+                                        ],
+                                      ),
+                                    ),
                                   ),
                                 ),
-                            ),
-                            Positioned.fill(
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
-                                    colors: [
-                                      Colors.transparent,
-                                      Colors.black.withOpacity(0.7),
+                                Positioned(
+                                  top: 0,
+                                  right: 0,
+                                  child: IconButton(
+                                    icon: const Icon(Icons.close, color: Colors.white),
+                                    onPressed: () => Navigator.of(context).pop(),
+                                  ),
+                                ),
+                                Positioned(
+                                  left: 20,
+                                  bottom: 20,
+                                  right: 20,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        series.title,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 28,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      if (series.rating != null || series.year != null) ...[
+                                        const SizedBox(height: 8),
+                                        Row(
+                                          children: [
+                                            if (series.rating != null)
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(
+                                                  horizontal: 8,
+                                                  vertical: 4,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.amber,
+                                                  borderRadius: BorderRadius.circular(4),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    const Icon(Icons.star, size: 16),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      series.rating!.toStringAsFixed(1),
+                                                      style: const TextStyle(
+                                                        fontWeight: FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            if (series.year != null) ...[
+                                              const SizedBox(width: 12),
+                                              Text(
+                                                series.year.toString(),
+                                                style: const TextStyle(color: Colors.white),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      ],
                                     ],
                                   ),
                                 ),
-                              ),
-                            ),
-                            Positioned(
-                              top: 0,
-                              right: 0,
-                              child: IconButton(
-                                icon: const Icon(Icons.close, color: Colors.white),
-                                onPressed: () => Navigator.of(context).pop(),
-                              ),
-                            ),
-                            Positioned(
-                              left: 20,
-                              bottom: 20,
-                              right: 20,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    series.title,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 28,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  if (series.rating != null || series.year != null) ...[
-                                    const SizedBox(height: 8),
-                                    Row(
-                                      children: [
-                                        if (series.rating != null)
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 8,
-                                              vertical: 4,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: Colors.amber,
-                                              borderRadius: BorderRadius.circular(4),
-                                            ),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                const Icon(Icons.star, size: 16),
-                                                const SizedBox(width: 4),
-                                                Text(
-                                                  series.rating!.toStringAsFixed(1),
-                                                  style: const TextStyle(
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        if (series.year != null) ...[
-                                          const SizedBox(width: 12),
-                                          Text(
-                                            series.year.toString(),
-                                            style: const TextStyle(color: Colors.white),
-                                          ),
-                                        ],
-                                      ],
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        if (series.description != null)
-                          Padding(
-                            padding: const EdgeInsets.all(20),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Özet',
-                                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  series.description!,
-                                  style: Theme.of(context).textTheme.bodyLarge,
-                                ),
-                                if (series.genres != null) ...[
-                                  const SizedBox(height: 16),
-                                  Wrap(
-                                    spacing: 8,
-                                    runSpacing: 8,
-                                    children: series.genres!.map((genre) {
-                                      return Chip(label: Text(genre.title));
-                                    }).toList(),
-                                  ),
-                                ],
-                                const SizedBox(height: 20),
-                                Text(
-                                  'Sezonlar',
-                                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                ...seasons.map((season) => ExpansionTile(
-                                  title: Text(season.title),
-                                  children: season.episodes.map((episode) => ListTile(
-                                    title: Text(episode.title),
-                                    trailing: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        IconButton(
-                                          icon: const Icon(HugeIcons.strokeRoundedPlay),
-                                          onPressed: () {
-                                            Navigator.pop(context);
-                                            showDialog(
-                                              context: context,
-                                              builder: (context) => VideoPlayerDialog(
-                                                videoUrl: episode.sources.first.url,
-                                                title: '${series.title} - ${episode.title}',
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                        IconButton(
-                                          icon: const Icon(HugeIcons.strokeRoundedDownload05),
-                                          onPressed: () {
-                                            Navigator.pop(context);
-                                            _handleDownload(
-                                              episode.sources.first.url,
-                                              '${series.title} - ${episode.title}',
-                                            );
-                                          },
-                                        ),
-                                      ],
-                                    ),
-                                  )).toList(),
-                                )).toList(),
                               ],
                             ),
-                          ),
-                      ],
+                            if (series.description != null)
+                              Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Özet',
+                                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      series.description!,
+                                      style: Theme.of(context).textTheme.bodyLarge,
+                                    ),
+                                    if (series.genres != null) ...[
+                                      const SizedBox(height: 16),
+                                      Wrap(
+                                        spacing: 8,
+                                        runSpacing: 8,
+                                        children: series.genres!.map((genre) {
+                                          return Chip(label: Text(genre.title));
+                                        }).toList(),
+                                      ),
+                                    ],
+                                    const SizedBox(height: 20),
+                                    Text(
+                                      'Sezonlar',
+                                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    ...seasons.map((season) => ExpansionTile(
+                                      title: Text(season.title),
+                                      children: season.episodes.map((episode) => ListTile(
+                                        title: Text(episode.title),
+                                        trailing: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            IconButton(
+                                              icon: const Icon(HugeIcons.strokeRoundedPlay),
+                                              onPressed: () {
+                                                Navigator.pop(context);
+                                                showDialog(
+                                                  context: context,
+                                                  builder: (context) => VideoPlayerDialog(
+                                                    videoUrl: episode.sources.first.url,
+                                                    title: '${series.title} - ${episode.title}',
+                                                  ),
+                                                );
+                                              },
+                                            ),
+                                            IconButton(
+                                              icon: const Icon(HugeIcons.strokeRoundedDownload05),
+                                              onPressed: () {
+                                                Navigator.pop(context);
+                                                _handleDownload(
+                                                  episode.sources.first.url,
+                                                  '${series.title} - ${episode.title}',
+                                                );
+                                              },
+                                            ),
+                                          ],
+                                        ),
+                                      )).toList(),
+                                    )).toList(),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         );

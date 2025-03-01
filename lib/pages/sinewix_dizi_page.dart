@@ -431,318 +431,334 @@ class _SinewixDiziPageState extends State<SinewixDiziPage> {
 
         await showDialog(
           context: context,
-          builder: (context) => Dialog(
-            backgroundColor: Colors.transparent,
-            child: FractionallySizedBox(
-              widthFactor: 0.75,
-              heightFactor: 0.85,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surface,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Column(
-                  children: [
-                    Expanded(
-                      child: CustomScrollView(
-                        slivers: [
-                          // Backdrop ve Başlık
-                          SliverAppBar(
-                            expandedHeight: 400,
-                            pinned: true,
-                            flexibleSpace: FlexibleSpaceBar(
-                              background: Stack(
-                                fit: StackFit.expand,
-                                children: [
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(16),
-                                    child: tvShowDetail.backdropPathTv.isNotEmpty
-                                        ? Image.network(
-                                            tvShowDetail.backdropPathTv,
-                                            fit: BoxFit.cover,
-                                            errorBuilder: (context, error, stackTrace) => Container(
-                                              color: Colors.grey[900],
-                                              child: const Center(
-                                                child: Icon(
-                                                  HugeIcons.strokeRoundedImageNotFound01,
-                                                  size: 50,
-                                                  color: Colors.grey,
-                                                ),
-                                              ),
-                                            ),
-                                          )
-                                        : Container(
-                                            color: Colors.grey[900],
-                                            child: const Center(
-                                              child: Icon(
-                                                HugeIcons.strokeRoundedImageNotFound01,
-                                                size: 50,
-                                                color: Colors.grey,
-                                              ),
-                                            ),
-                                          ),
-                                  ),
-                                  Container(
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        begin: Alignment.topCenter,
-                                        end: Alignment.bottomCenter,
-                                        colors: [
-                                          Colors.transparent,
-                                          Colors.black.withOpacity(0.7),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                  Positioned(
-                                    left: 20,
-                                    bottom: 20,
-                                    right: 20,
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          tvShowDetail.title,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 28,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Row(
-                                          children: [
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(
-                                                horizontal: 8,
-                                                vertical: 4,
-                                              ),
-                                              decoration: BoxDecoration(
-                                                color: Colors.amber,
-                                                borderRadius: BorderRadius.circular(4),
-                                              ),
-                                              child: Row(
-                                                children: [
-                                                  const Icon(HugeIcons.strokeRoundedStar, size: 16),
-                                                  const SizedBox(width: 4),
-                                                  Text(
-                                                    tvShowDetail.voteAverage.toStringAsFixed(1),
-                                                    style: const TextStyle(
-                                                      fontWeight: FontWeight.bold,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                            const SizedBox(width: 12),
-                                            Text(
-                                              tvShowDetail.firstAirDate,
-                                              style: const TextStyle(color: Colors.white),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            actions: [
-                              IconButton(
-                                icon: const Icon(Icons.close),
-                                onPressed: () => Navigator.pop(context),
-                              ),
-                            ],
-                          ),
-                          // İçerik
-                          SliverToBoxAdapter(
-                            child: Padding(
-                              padding: const EdgeInsets.all(20),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Türler
-                                  if (tvShowDetail.genres.isNotEmpty) ...[
-                                    Wrap(
-                                      spacing: 8,
-                                      runSpacing: 8,
-                                      children: tvShowDetail.genres.map((genre) {
-                                        return Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 12,
-                                            vertical: 6,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .primaryContainer,
-                                            borderRadius: BorderRadius.circular(20),
-                                          ),
-                                          child: Text(
-                                            genre,
-                                            style: TextStyle(
-                                              color: Theme.of(context)
-                                                  .colorScheme
-                                                  .onPrimaryContainer,
-                                            ),
-                                          ),
-                                        );
-                                      }).toList(),
-                                    ),
-                                    const SizedBox(height: 24),
-                                  ],
-                                  // Özet
-                                  Text(
-                                    'Özet',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleLarge
-                                        ?.copyWith(fontWeight: FontWeight.bold),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    tvShowDetail.overview,
-                                    style: Theme.of(context).textTheme.bodyLarge,
-                                  ),
-                                  const SizedBox(height: 24),
-                                  // Oyuncular
-                                  if (tvShowDetail.cast.isNotEmpty) ...[
-                                    Text(
-                                      'Oyuncular',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleLarge
-                                          ?.copyWith(fontWeight: FontWeight.bold),
-                                    ),
-                                    const SizedBox(height: 16),
-                                    SizedBox(
-                                      height: 150,
-                                      child: ListView.builder(
-                                        scrollDirection: Axis.horizontal,
-                                        itemCount: tvShowDetail.cast.length,
-                                        itemBuilder: (context, index) {
-                                          final cast = tvShowDetail.cast[index];
-                                          return Padding(
-                                            padding: const EdgeInsets.only(right: 16),
-                                            child: SizedBox(
-                                              width: 100,
-                                              child: Column(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Container(
-                                                    width: 80,
-                                                    height: 80,
-                                                    decoration: BoxDecoration(
-                                                      shape: BoxShape.circle,
-                                                      boxShadow: [
-                                                        BoxShadow(
-                                                          color: Colors.black.withOpacity(0.2),
-                                                          blurRadius: 8,
-                                                          offset: const Offset(0, 4),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                    child: CircleAvatar(
-                                                      backgroundImage: cast.profilePath != null
-                                                          ? NetworkImage(cast.profilePath!)
-                                                          : null,
-                                                      child: cast.profilePath == null
-                                                          ? const Icon(HugeIcons.strokeRoundedUser, size: 40)
-                                                          : null,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 8),
-                                                  Text(
-                                                    cast.name,
-                                                    style: const TextStyle(
-                                                      fontWeight: FontWeight.w500,
-                                                      fontSize: 12,
-                                                    ),
-                                                    textAlign: TextAlign.center,
-                                                    maxLines: 2,
-                                                    overflow: TextOverflow.ellipsis,
-                                                  ),
-                                                  const SizedBox(height: 4),
-                                                  Text(
-                                                    cast.character,
-                                                    style: Theme.of(context)
-                                                        .textTheme
-                                                        .bodySmall
-                                                        ?.copyWith(fontSize: 11),
-                                                    textAlign: TextAlign.center,
-                                                    maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                    ),
-                                  ],
-                                  const SizedBox(height: 24),
-                                  // Sezonlar
-                                  Text(
-                                    'Sezonlar',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleLarge
-                                        ?.copyWith(fontWeight: FontWeight.bold),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  ListView.builder(
-                                    shrinkWrap: true,
-                                    physics: const NeverScrollableScrollPhysics(),
-                                    itemCount: tvShowDetail.seasons.length,
-                                    itemBuilder: (context, seasonIndex) {
-                                      final season = tvShowDetail.seasons[seasonIndex];
-                                      return Padding(
-                                        padding: const EdgeInsets.only(bottom: 16.0), // Sezonlar arası boşluğu azalttık (24->16)
-                                        child: Card(
-                                          margin: EdgeInsets.zero,
-                                          child: ExpansionTile(
-                                            leading: ClipRRect(
-                                              borderRadius: BorderRadius.circular(8),
-                                              child: Image.network(
-                                                season.posterPath,
-                                                width: 60,
-                                                height: 90,
+          barrierDismissible: false,
+          builder: (context) => WillPopScope(
+            onWillPop: () async => false,
+            child: GestureDetector(
+              onTap: () {}, // Boş gesture detector arkaya tıklamayı engeller
+              child: Dialog(
+                backgroundColor: Colors.transparent,
+                child: FractionallySizedBox(
+                  widthFactor: 0.75,
+                  heightFactor: 0.85,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surface,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Column(
+                      children: [
+                        Expanded(
+                          child: CustomScrollView(
+                            slivers: [
+                              // Backdrop ve Başlık
+                              SliverAppBar(
+                                expandedHeight: 400,
+                                pinned: true,
+                                flexibleSpace: FlexibleSpaceBar(
+                                  background: Stack(
+                                    fit: StackFit.expand,
+                                    children: [
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(16),
+                                        child: tvShowDetail.backdropPathTv.isNotEmpty
+                                            ? Image.network(
+                                                tvShowDetail.backdropPathTv,
                                                 fit: BoxFit.cover,
-                                                errorBuilder: (context, error, stackTrace) =>
-                                                    Container(
-                                                  width: 60,
-                                                  height: 90,
+                                                errorBuilder: (context, error, stackTrace) => Container(
                                                   color: Colors.grey[900],
-                                                  child: const Icon(
+                                                  child: const Center(
+                                                    child: Icon(
+                                                      HugeIcons.strokeRoundedImageNotFound01,
+                                                      size: 50,
+                                                      color: Colors.grey,
+                                                    ),
+                                                  ),
+                                                ),
+                                              )
+                                            : Container(
+                                                color: Colors.grey[900],
+                                                child: const Center(
+                                                  child: Icon(
                                                     HugeIcons.strokeRoundedImageNotFound01,
+                                                    size: 50,
                                                     color: Colors.grey,
                                                   ),
                                                 ),
                                               ),
+                                      ),
+                                      Container(
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            begin: Alignment.topCenter,
+                                            end: Alignment.bottomCenter,
+                                            colors: [
+                                              Colors.transparent,
+                                              Colors.black.withOpacity(0.7),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                      Positioned(
+                                        left: 20,
+                                        bottom: 20,
+                                        right: 20,
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              tvShowDetail.title,
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 28,
+                                                fontWeight: FontWeight.bold,
+                                              ),
                                             ),
-                                            title: Text(
-                                              season.name,
-                                              style: const TextStyle(fontWeight: FontWeight.bold),
+                                            const SizedBox(height: 8),
+                                            Row(
+                                              children: [
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 4,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.amber,
+                                                    borderRadius: BorderRadius.circular(4),
+                                                  ),
+                                                  child: Row(
+                                                    children: [
+                                                      const Icon(HugeIcons.strokeRoundedStar, size: 16),
+                                                      const SizedBox(width: 4),
+                                                      Text(
+                                                        tvShowDetail.voteAverage.toStringAsFixed(1),
+                                                        style: const TextStyle(
+                                                          fontWeight: FontWeight.bold,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 12),
+                                                Text(
+                                                  tvShowDetail.firstAirDate,
+                                                  style: const TextStyle(color: Colors.white),
+                                                ),
+                                              ],
                                             ),
-                                            subtitle: Text(
-                                              '${season.episodes.length} Bölüm',
-                                              style: Theme.of(context).textTheme.bodySmall,
-                                            ),
-                                            children: season.episodes.map((episode) {
-                                              return Padding( // Bölümler arası padding ekledik
-                                                padding: const EdgeInsets.only(bottom: 8.0), // Bölümler arası boşluk
-                                                child: ListTile(
-                                                  leading: episode.stillPathTv.isNotEmpty
-                                                      ? ClipRRect(
-                                                          borderRadius: BorderRadius.circular(4),
-                                                          child: Image.network(
-                                                            episode.stillPathTv,
-                                                            width: 100,
-                                                            height: 60,
-                                                            fit: BoxFit.cover,
-                                                            errorBuilder: (context, error, stackTrace) =>
-                                                                Container(
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                actions: [
+                                  IconButton(
+                                    icon: const Icon(Icons.close),
+                                    onPressed: () => Navigator.pop(context),
+                                  ),
+                                ],
+                              ),
+                              // İçerik
+                              SliverToBoxAdapter(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(20),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      // Türler
+                                      if (tvShowDetail.genres.isNotEmpty) ...[
+                                        Wrap(
+                                          spacing: 8,
+                                          runSpacing: 8,
+                                          children: tvShowDetail.genres.map((genre) {
+                                            return Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 12,
+                                                vertical: 6,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .primaryContainer,
+                                                borderRadius: BorderRadius.circular(20),
+                                              ),
+                                              child: Text(
+                                                genre,
+                                                style: TextStyle(
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .onPrimaryContainer,
+                                                ),
+                                              ),
+                                            );
+                                          }).toList(),
+                                        ),
+                                        const SizedBox(height: 24),
+                                      ],
+                                      // Özet
+                                      Text(
+                                        'Özet',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleLarge
+                                            ?.copyWith(fontWeight: FontWeight.bold),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        tvShowDetail.overview,
+                                        style: Theme.of(context).textTheme.bodyLarge,
+                                      ),
+                                      const SizedBox(height: 24),
+                                      // Oyuncular
+                                      if (tvShowDetail.cast.isNotEmpty) ...[
+                                        Text(
+                                          'Oyuncular',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleLarge
+                                              ?.copyWith(fontWeight: FontWeight.bold),
+                                        ),
+                                        const SizedBox(height: 16),
+                                        SizedBox(
+                                          height: 150,
+                                          child: ListView.builder(
+                                            scrollDirection: Axis.horizontal,
+                                            itemCount: tvShowDetail.cast.length,
+                                            itemBuilder: (context, index) {
+                                              final cast = tvShowDetail.cast[index];
+                                              return Padding(
+                                                padding: const EdgeInsets.only(right: 16),
+                                                child: SizedBox(
+                                                  width: 100,
+                                                  child: Column(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      Container(
+                                                        width: 80,
+                                                        height: 80,
+                                                        decoration: BoxDecoration(
+                                                          shape: BoxShape.circle,
+                                                          boxShadow: [
+                                                            BoxShadow(
+                                                              color: Colors.black.withOpacity(0.2),
+                                                              blurRadius: 8,
+                                                              offset: const Offset(0, 4),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                        child: CircleAvatar(
+                                                          backgroundImage: cast.profilePath != null
+                                                              ? NetworkImage(cast.profilePath!)
+                                                              : null,
+                                                          child: cast.profilePath == null
+                                                              ? const Icon(HugeIcons.strokeRoundedUser, size: 40)
+                                                              : null,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(height: 8),
+                                                      Text(
+                                                        cast.name,
+                                                        style: const TextStyle(
+                                                          fontWeight: FontWeight.w500,
+                                                          fontSize: 12,
+                                                        ),
+                                                        textAlign: TextAlign.center,
+                                                        maxLines: 2,
+                                                        overflow: TextOverflow.ellipsis,
+                                                      ),
+                                                      const SizedBox(height: 4),
+                                                      Text(
+                                                        cast.character,
+                                                        style: Theme.of(context)
+                                                            .textTheme
+                                                            .bodySmall
+                                                            ?.copyWith(fontSize: 11),
+                                                        textAlign: TextAlign.center,
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow.ellipsis,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                      ],
+                                      const SizedBox(height: 24),
+                                      // Sezonlar
+                                      Text(
+                                        'Sezonlar',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleLarge
+                                            ?.copyWith(fontWeight: FontWeight.bold),
+                                      ),
+                                      const SizedBox(height: 16),
+                                      ListView.builder(
+                                        shrinkWrap: true,
+                                        physics: const NeverScrollableScrollPhysics(),
+                                        itemCount: tvShowDetail.seasons.length,
+                                        itemBuilder: (context, seasonIndex) {
+                                          final season = tvShowDetail.seasons[seasonIndex];
+                                          return Padding(
+                                            padding: const EdgeInsets.only(bottom: 16.0), // Sezonlar arası boşluğu azalttık (24->16)
+                                            child: Card(
+                                              margin: EdgeInsets.zero,
+                                              child: ExpansionTile(
+                                                leading: ClipRRect(
+                                                  borderRadius: BorderRadius.circular(8),
+                                                  child: Image.network(
+                                                    season.posterPath,
+                                                    width: 60,
+                                                    height: 90,
+                                                    fit: BoxFit.cover,
+                                                    errorBuilder: (context, error, stackTrace) =>
+                                                        Container(
+                                                      width: 60,
+                                                      height: 90,
+                                                      color: Colors.grey[900],
+                                                      child: const Icon(
+                                                        HugeIcons.strokeRoundedImageNotFound01,
+                                                        color: Colors.grey,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                                title: Text(
+                                                  season.name,
+                                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                                ),
+                                                subtitle: Text(
+                                                  '${season.episodes.length} Bölüm',
+                                                  style: Theme.of(context).textTheme.bodySmall,
+                                                ),
+                                                children: season.episodes.map((episode) {
+                                                  return Padding( // Bölümler arası padding ekledik
+                                                    padding: const EdgeInsets.only(bottom: 8.0), // Bölümler arası boşluk
+                                                    child: ListTile(
+                                                      leading: episode.stillPathTv.isNotEmpty
+                                                          ? ClipRRect(
+                                                              borderRadius: BorderRadius.circular(4),
+                                                              child: Image.network(
+                                                                episode.stillPathTv,
+                                                                width: 100,
+                                                                height: 60,
+                                                                fit: BoxFit.cover,
+                                                                errorBuilder: (context, error, stackTrace) =>
+                                                                    Container(
+                                                                  width: 100,
+                                                                  height: 60,
+                                                                  color: Colors.grey[900],
+                                                                  child: const Icon(
+                                                                    HugeIcons.strokeRoundedImageNotFound01,
+                                                                    color: Colors.grey,
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                            )
+                                                          : Container(
                                                               width: 100,
                                                               height: 60,
                                                               color: Colors.grey[900],
@@ -751,97 +767,88 @@ class _SinewixDiziPageState extends State<SinewixDiziPage> {
                                                                 color: Colors.grey,
                                                               ),
                                                             ),
-                                                          ),
-                                                        )
-                                                      : Container(
-                                                          width: 100,
-                                                          height: 60,
-                                                          color: Colors.grey[900],
-                                                          child: const Icon(
-                                                            HugeIcons.strokeRoundedImageNotFound01,
-                                                            color: Colors.grey,
-                                                          ),
-                                                        ),
-                                                  title: Text(
-                                                    '${episode.episodeNumber}. ${episode.name}',
-                                                    style: const TextStyle(fontSize: 14),
-                                                  ),
-                                                  subtitle: episode.overview != null
-                                                      ? Text(
-                                                          episode.overview!,
-                                                          maxLines: 2,
-                                                          overflow: TextOverflow.ellipsis,
-                                                          style: Theme.of(context)
-                                                              .textTheme
-                                                              .bodySmall,
-                                                        )
-                                                      : null,
-                                                  trailing: Row(
-                                                    mainAxisSize: MainAxisSize.min,
-                                                    children: [
-                                                      if (episode.enableStream && episode.videos.isNotEmpty)
-                                                        IconButton(
-                                                          icon: const Icon(HugeIcons.strokeRoundedPlay),
-                                                          onPressed: () {
-                                                            // Save show to recently watched
-                                                            _saveRecentShow(show);
-                                                            
-                                                            // Episode oynatma dialog'ını göster
-                                                            showDialog(
-                                                              context: context,
-                                                              builder: (context) => VideoPlayerDialog(
-                                                                videoUrl: episode.videos.first.link, // API'den gelen link
-                                                                title:
-                                                                    '${tvShowDetail.title} - ${season.name} - ${episode.episodeNumber}. Bölüm',
-                                                              ),
-                                                            );
-                                                          },
-                                                        ),
-                                                      if (episode.videos.isNotEmpty)
-                                                        IconButton(
-                                                          icon: const Icon(HugeIcons.strokeRoundedDownload05),
-                                                          onPressed: () async {
-                                                            final safeFileName = _sanitizeFileName(
-                                                              '${tvShowDetail.title} - ${season.name} - ${episode.episodeNumber}. Bölüm'
-                                                            );
-                                                            
-                                                            final saveLocation = await FilePicker.platform.saveFile(
-                                                              dialogTitle: 'Kayıt Konumu Seç',
-                                                              fileName: '$safeFileName.mp4',
-                                                            );
+                                                      title: Text(
+                                                        '${episode.episodeNumber}. ${episode.name}',
+                                                        style: const TextStyle(fontSize: 14),
+                                                      ),
+                                                      subtitle: episode.overview != null
+                                                          ? Text(
+                                                              episode.overview!,
+                                                              maxLines: 2,
+                                                              overflow: TextOverflow.ellipsis,
+                                                              style: Theme.of(context)
+                                                                  .textTheme
+                                                                  .bodySmall,
+                                                            )
+                                                          : null,
+                                                      trailing: Row(
+                                                        mainAxisSize: MainAxisSize.min,
+                                                        children: [
+                                                          if (episode.enableStream && episode.videos.isNotEmpty)
+                                                            IconButton(
+                                                              icon: const Icon(HugeIcons.strokeRoundedPlay),
+                                                              onPressed: () {
+                                                                // Save show to recently watched
+                                                                _saveRecentShow(show);
+                                                                
+                                                                // Episode oynatma dialog'ını göster
+                                                                showDialog(
+                                                                  context: context,
+                                                                  builder: (context) => VideoPlayerDialog(
+                                                                    videoUrl: episode.videos.first.link, // API'den gelen link
+                                                                    title:
+                                                                        '${tvShowDetail.title} - ${season.name} - ${episode.episodeNumber}. Bölüm',
+                                                                  ),
+                                                                );
+                                                              },
+                                                            ),
+                                                          if (episode.videos.isNotEmpty)
+                                                            IconButton(
+                                                              icon: const Icon(HugeIcons.strokeRoundedDownload05),
+                                                              onPressed: () async {
+                                                                final safeFileName = _sanitizeFileName(
+                                                                  '${tvShowDetail.title} - ${season.name} - ${episode.episodeNumber}. Bölüm'
+                                                                );
+                                                                
+                                                                final saveLocation = await FilePicker.platform.saveFile(
+                                                                  dialogTitle: 'Kayıt Konumu Seç',
+                                                                  fileName: '$safeFileName.mp4',
+                                                                );
 
-                                                            if (saveLocation != null && context.mounted) {
-                                                              DownloadManager().startDownload(
-                                                                episode.videos.first.link,
-                                                                safeFileName,
-                                                                saveLocation
-                                                              );
-                                                              Navigator.of(context).push(
-                                                                MaterialPageRoute(
-                                                                  builder: (context) => const DownloadsPage(),
-                                                                ),
-                                                              );
-                                                            }
-                                                          },
-                                                        ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              );
-                                            }).toList(),
-                                          ),
-                                        ),
-                                      );
-                                    },
+                                                                if (saveLocation != null && context.mounted) {
+                                                                  DownloadManager().startDownload(
+                                                                    episode.videos.first.link,
+                                                                    safeFileName,
+                                                                    saveLocation
+                                                                  );
+                                                                  Navigator.of(context).push(
+                                                                    MaterialPageRoute(
+                                                                      builder: (context) => const DownloadsPage(),
+                                                                    ),
+                                                                  );
+                                                                }
+                                                              },
+                                                            ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  );
+                                                }).toList(),
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ],
                                   ),
-                                ],
+                                ),
                               ),
-                            ),
+                            ],
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
