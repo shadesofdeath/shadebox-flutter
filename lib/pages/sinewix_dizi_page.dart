@@ -13,6 +13,8 @@ import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:hugeicons/hugeicons.dart';
+import 'dart:math';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // TV Show model
 class TVShow {
@@ -38,6 +40,16 @@ class TVShow {
       type: json['type'] ?? 'serie',
       voteAverage: (json['vote_average'] ?? 0.0).toDouble(),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': title,
+      'poster_path': posterPath,
+      'type': type,
+      'vote_average': voteAverage,
+    };
   }
 }
 
@@ -267,12 +279,21 @@ class _SinewixDiziPageState extends State<SinewixDiziPage> {
   int _currentPage = 1;
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
+  final ImageCache imageCache = PaintingBinding.instance.imageCache;
+  final PageController _recentShowsController = PageController();
+  List<TVShow> _recentlyWatched = [];
+  Timer? _autoScrollTimer;
+  int _currentRecentPage = 0;
 
   @override
   void initState() {
     super.initState();
+    imageCache.maximumSize = 100;
+    imageCache.maximumSizeBytes = 50 * 1024 * 1024;
     _scrollController.addListener(_scrollListener);
     _fetchShows();
+    _loadRecentlyWatched();
+    _startAutoScroll();
   }
 
   void _scrollListener() {
@@ -762,6 +783,9 @@ class _SinewixDiziPageState extends State<SinewixDiziPage> {
                                                         IconButton(
                                                           icon: const Icon(HugeIcons.strokeRoundedPlay),
                                                           onPressed: () {
+                                                            // Save show to recently watched
+                                                            _saveRecentShow(show);
+                                                            
                                                             // Episode oynatma dialog'ını göster
                                                             showDialog(
                                                               context: context,
@@ -792,9 +816,10 @@ class _SinewixDiziPageState extends State<SinewixDiziPage> {
                                                                 safeFileName,
                                                                 saveLocation
                                                               );
-                                                              Navigator.push(
-                                                                context,
-                                                                MaterialPageRoute(builder: (context) => const DownloadsPage()),
+                                                              Navigator.of(context).push(
+                                                                MaterialPageRoute(
+                                                                  builder: (context) => const DownloadsPage(),
+                                                                ),
                                                               );
                                                             }
                                                           },
@@ -864,6 +889,190 @@ class _SinewixDiziPageState extends State<SinewixDiziPage> {
     return sanitized;
   }
 
+  void _startAutoScroll() {
+    _autoScrollTimer?.cancel();
+    _autoScrollTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+      if (_recentlyWatched.isNotEmpty && mounted) {
+        final pageCount = (_recentlyWatched.length / 8).ceil();
+        final nextPage = (_currentRecentPage + 1) % pageCount;
+        
+        _recentShowsController.animateToPage(
+          nextPage,
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeInOut,
+        );
+      }
+    });
+  }
+
+  Future<void> _loadRecentlyWatched() async {
+    final prefs = await SharedPreferences.getInstance();
+    final recentShowsJson = prefs.getStringList('recent_shows') ?? [];
+    setState(() {
+      _recentlyWatched = recentShowsJson
+          .map((json) => TVShow.fromJson(jsonDecode(json)))
+          .toList();
+    });
+  }
+
+  Future<void> _saveRecentShow(TVShow show) async {
+    if (_recentlyWatched.any((s) => s.id == show.id)) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    _recentlyWatched.insert(0, show);
+    if (_recentlyWatched.length > 20) {
+      _recentlyWatched.removeLast();
+    }
+
+    await prefs.setStringList(
+      'recent_shows',
+      _recentlyWatched.map((s) => jsonEncode(s.toJson())).toList(),
+    );
+
+    setState(() {});
+  }
+
+  Widget _buildRecentlyWatchedSection() {
+    if (_recentlyWatched.isEmpty) return const SizedBox.shrink();
+
+    final int itemsPerPage = 8;
+    final int pageCount = (_recentlyWatched.length / itemsPerPage).ceil();
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(left: 16, top: 16, bottom: 8),
+          child: Text(
+            'Son İzlenenler',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        SizedBox(
+          height: 240,
+          child: PageView.builder(
+            controller: _recentShowsController,
+            onPageChanged: (page) {
+              setState(() => _currentRecentPage = page);
+            },
+            itemCount: pageCount,
+            itemBuilder: (context, pageIndex) {
+              final startIndex = pageIndex * itemsPerPage;
+              final endIndex = min(startIndex + itemsPerPage, _recentlyWatched.length);
+              final pageShows = _recentlyWatched.sublist(startIndex, endIndex);
+
+              return GridView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 8,
+                  childAspectRatio: 0.65,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                ),
+                itemCount: pageShows.length,
+                itemBuilder: (context, index) {
+                  final show = pageShows[index];
+                  return _buildShowCard(show);
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildShowCard(TVShow show) {
+    return Card(
+      elevation: 0,
+      color: Theme.of(context).colorScheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(
+          color: Theme.of(context).colorScheme.outline.withOpacity(0.1),
+          width: 1,
+        ),
+      ),
+      child: InkWell(
+        onTap: () => _showTVDetails(show),
+        borderRadius: BorderRadius.circular(8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(8),
+                    ),
+                    child: Image.network(
+                      show.posterPath,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) =>
+                          const Icon(Icons.error, size: 20),
+                    ),
+                  ),
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface.withOpacity(0.8),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            HugeIcons.strokeRoundedStar,
+                            size: 14,
+                            color: Colors.amber,
+                          ),
+                          const SizedBox(width: 2),
+                          Text(
+                            show.voteAverage.toStringAsFixed(1),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Text(
+                show.title,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold( // Column yerine Scaffold kullanıyoruz
@@ -894,123 +1103,49 @@ class _SinewixDiziPageState extends State<SinewixDiziPage> {
             ),
           ),
           Expanded(
-            child: _isLoading && _shows.isEmpty
-                ? const Center(child: CircularProgressIndicator())
-                : _filteredShows.isEmpty
-                    ? const Center(child: Text('Dizi bulunamadı'))
-                    : GridView.builder(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.all(12),
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 8,
-                          childAspectRatio: 0.65,
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 16,
-                        ),
-                        itemCount: _filteredShows.length + (_isLoadingMore ? 1 : 0),
-                        itemBuilder: (context, index) {
-                          if (index == _filteredShows.length) {
-                            return const Center(
-                              child: Padding(
-                                padding: EdgeInsets.all(8.0),
-                                child: CircularProgressIndicator(),
-                              ),
-                            );
-                          }
-                          final show = _filteredShows[index];
-                          return Card(
-                            elevation: 0,
-                            color: Theme.of(context).colorScheme.surface,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              side: BorderSide(
-                                color: Theme.of(context).colorScheme.outline.withOpacity(0.1),
-                                width: 1,
-                              ),
-                            ),
-                            child: InkWell(
-                              onTap: () => _showTVDetails(show),
-                              borderRadius: BorderRadius.circular(8),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  Expanded(
-                                    child: Stack(
-                                      fit: StackFit.expand,
-                                      children: [
-                                        ClipRRect(
-                                          borderRadius: const BorderRadius.vertical(
-                                            top: Radius.circular(8),
-                                          ),
-                                          child: Image.network(
-                                            show.posterPath,
-                                            fit: BoxFit.cover,
-                                            errorBuilder: (context, error, stackTrace) =>
-                                                const Icon(Icons.error, size: 20),
-                                          ),
-                                        ),
-                                        Positioned(
-                                          top: 8,
-                                          right: 8,
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 6,
-                                              vertical: 2,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: Theme.of(context).colorScheme.surface.withOpacity(0.8),
-                                              borderRadius: BorderRadius.circular(4),
-                                            ),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                const Icon(
-                                                  HugeIcons.strokeRoundedStar,
-                                                  size: 14,
-                                                  color: Colors.amber,
-                                                ),
-                                                const SizedBox(width: 2),
-                                                Text(
-                                                  show.voteAverage.toStringAsFixed(1),
-                                                  style: const TextStyle(
-                                                    fontSize: 12,
-                                                    fontWeight: FontWeight.w500,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Padding(
-                                    padding: const EdgeInsets.all(8.0),
-                                    child: Text(
-                                      show.title,
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
+            child: CustomScrollView(
+              controller: _scrollController,
+              slivers: [
+                // Add recently watched section
+                SliverToBoxAdapter(
+                  child: _buildRecentlyWatchedSection(),
+                ),
+                
+                // ...existing grid view code...
+                SliverGrid(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 8,
+                    childAspectRatio: 0.65,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 16,
+                  ),
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      if (index == _filteredShows.length) {
+                        return const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(8.0),
+                            child: CircularProgressIndicator(),
+                          ),
+                        );
+                      }
+                      final show = _filteredShows[index];
+                      return _buildShowCard(show);
+                    },
+                    childCount: _filteredShows.length + (_isLoadingMore ? 1 : 0),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const DownloadsPage()),
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => const DownloadsPage(),
+            ),
           );
         },
         child: const Icon(HugeIcons.strokeRoundedDownload05),
@@ -1020,6 +1155,10 @@ class _SinewixDiziPageState extends State<SinewixDiziPage> {
 
   @override
   void dispose() {
+    _autoScrollTimer?.cancel();
+    _recentShowsController.dispose();
+    imageCache.clear();
+    imageCache.clearLiveImages();
     _searchController.dispose();
     _scrollController.dispose();
     super.dispose();

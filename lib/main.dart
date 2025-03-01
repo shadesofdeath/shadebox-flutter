@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'pages/sinewix_film_page.dart';
 import 'pages/sinewix_dizi_page.dart';
 import 'pages/sinewix_anime_page.dart';
+import 'pages/film_makinesi_page.dart'; // Add this import
 import 'package:media_kit/media_kit.dart';
 import 'package:flutter/services.dart';
 import 'dart:io';
@@ -74,7 +75,7 @@ class _SetupWrapperState extends State<SetupWrapper> {
 
       // KekikStream kurulumu
       setState(() {
-        statusMessage = 'KekikStream yükleniyor...';
+        statusMessage = 'Eklentiler yükleniyor...';
         progress = 0.5;
       });
       await _installKekikStream();
@@ -392,6 +393,7 @@ class _HomePageState extends State<HomePage> {
     SinewixFilmPage(),
     SinewixDiziPage(),
     SinewixAnimePage(),
+    FilmMakinesiPage(), // Add the new page
     SinewixTVPage(),
   ];
 
@@ -432,11 +434,12 @@ class _HomePageState extends State<HomePage> {
                         _pages.length,
                         (index) => _buildTabItem(
                           index: index,
-                          title: ['Film', 'Dizi', 'Anime', 'Canlı TV'][index],
+                          title: ['Film', 'Dizi', 'Anime', 'Film Makinesi', 'Canlı TV'][index], // Update titles
                           icon: [
                             HugeIcons.strokeRoundedVideo01, 
                             HugeIcons.strokeRoundedVideoReplay,
                             HugeIcons.strokeRoundedTongue,
+                            HugeIcons.strokeRoundedPlayCircle, // Add new icon
                             HugeIcons.strokeRoundedTv01
                           ][index],
                         ),
