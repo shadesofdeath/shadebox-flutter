@@ -30,8 +30,8 @@ class TVShow {
 
   factory TVShow.fromJson(Map<String, dynamic> json) {
     return TVShow(
-      id: json['id'],
-      title: json['name'] ?? '',
+      id: json['id'] ?? 0,
+      title: json['title'] ?? json['name'] ?? '', // Hem 'title' hem 'name' kontrolü ekledik
       posterPath: json['poster_path'] ?? '',
       type: json['type'] ?? 'anime',
       voteAverage: (json['vote_average'] ?? 0.0).toDouble(),
@@ -41,7 +41,7 @@ class TVShow {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'title': title,
+      'title': title, // 'name' yerine 'title' kullanıyoruz
       'poster_path': posterPath,
       'type': type,
       'vote_average': voteAverage,

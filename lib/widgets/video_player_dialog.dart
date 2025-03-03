@@ -14,6 +14,7 @@ class VideoPlayerDialog extends StatefulWidget {
   final bool isLiveStream;
   final String? userAgent;
   final String? referer;
+  final Map<String, String>? headers; // Yeni headers parametresi
 
   const VideoPlayerDialog({
     Key? key,
@@ -22,6 +23,7 @@ class VideoPlayerDialog extends StatefulWidget {
     this.isLiveStream = false,
     this.userAgent,
     this.referer,
+    this.headers, // Constructor'a headers ekledik
   }) : super(key: key);
 
   @override
@@ -92,7 +94,7 @@ class _VideoPlayerDialogState extends State<VideoPlayerDialog> {
         }
       }
 
-      final headers = <String, String>{};
+      final headers = widget.headers ?? <String, String>{};
       if (widget.userAgent != null) {
         headers['User-Agent'] = widget.userAgent!;
       }
