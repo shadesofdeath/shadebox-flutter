@@ -39,6 +39,14 @@ jobs:
       - name: Build Windows
         run: flutter build windows --release
         
+      - name: Install Inno Setup
+        run: |
+          choco install innosetup -y
+        
+      - name: Build Setup
+        run: |
+          & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' inno_setup.iss
+        
       - name: Check Build Directory
         run: |
           Get-ChildItem -Path "build\windows\x64\runner\Release" -Recurse
@@ -63,6 +71,13 @@ jobs:
         with:
           name: windows-build
           path: release-builds/ShadeBox-Windows.zip
+          if-no-files-found: error
+          
+      - name: Upload Setup Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-setup
+          path: Output/ShadeBox-Setup.exe
           if-no-files-found: error
         
   build-linux:
@@ -157,7 +172,6 @@ jobs:
             echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
           else
             echo "tag=v1.0.0" >> $GITHUB_OUTPUT
-          fi
 
       - name: Download Artifacts
         uses: actions/download-artifact@v4
@@ -172,6 +186,7 @@ jobs:
           files: |
             artifacts/windows-build/ShadeBox-Windows.zip
             artifacts/linux-build/ShadeBox-Linux.zip
+            artifacts/windows-setup/ShadeBox-Setup.exe
           draft: false
           prerelease: false
         env:
