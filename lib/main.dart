@@ -438,6 +438,133 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     );
   }
 
+  void _showDonationDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(HugeIcons.strokeRoundedHealtcare, 
+                 color: Theme.of(context).colorScheme.primary),
+            const SizedBox(width: 8),
+            const Text('Bağış & Destek'),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Geliştirici: ShadesOfDeath',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+              _buildBankInfo(
+                'VakıfBank',
+                'TR47 0001 5001 5800 7309 9858 32',
+              ),
+              const SizedBox(height: 16),
+              const Text('Destek: Ömer Faruk Sancak',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+              _buildBankInfo(
+                'EnPara',
+                'TR70 0011 1000 0000 0118 5102 59',
+              ),
+              const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Theme.of(context).colorScheme.primaryContainer.withOpacity(0.5),
+                      Theme.of(context).colorScheme.secondaryContainer.withOpacity(0.5),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Icon(
+                      HugeIcons.strokeRoundedInLove,
+                      color: Theme.of(context).colorScheme.primary,
+                      size: 24,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Çay olur, çorba olur, fitre olur, zekat olur;\nkenarda dursun, belki bişi denemek isteyen olur..',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontStyle: FontStyle.italic,
+                        fontSize: 14,
+                        height: 1.5,
+                        color: Theme.of(context).colorScheme.onSurface,
+                        shadows: [
+                          Shadow(
+                            color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                            blurRadius: 2,
+                            offset: const Offset(0, 1),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Kapat'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBankInfo(String bankName, String iban) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceVariant,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(bankName,
+              style: const TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Flexible(child: Text(iban)),
+              IconButton(
+                icon: const Icon(HugeIcons.strokeRoundedCopy01),
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: iban));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('IBAN kopyalandı'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                },
+                tooltip: 'IBAN\'ı Kopyala',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildThemeControls() {
     final colorScheme = Theme.of(context).colorScheme;
     
@@ -450,7 +577,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Text(
-                'Tema',
+                'Menü',
                 style: TextStyle(
                   color: colorScheme.onSurfaceVariant.withOpacity(0.7),
                   fontSize: 12,
@@ -467,6 +594,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                   ? MainAxisAlignment.start 
                   : MainAxisAlignment.center,
               children: [
+                // Tema değiştirme butonu
                 Container(
                   width: 36,
                   height: 36,
@@ -501,6 +629,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                 ),
                 if (_isMenuExpanded) ...[
                   const SizedBox(width: 8),
+                  // Renk teması butonu
                   Container(
                     width: 36,
                     height: 36,
@@ -516,6 +645,26 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                         size: 20,
                       ),
                       onPressed: () => _showColorSchemeSelector(),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Bağış butonu
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: colorScheme.surfaceVariant.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      icon: Icon(
+                        HugeIcons.strokeRoundedCoffee02,
+                        color: colorScheme.onSurfaceVariant,
+                        size: 20,
+                      ),
+                      onPressed: _showDonationDialog,
+                      tooltip: 'Bağış Yap',
                     ),
                   ),
                 ],

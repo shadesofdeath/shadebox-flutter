@@ -189,7 +189,7 @@ class SinewixFilmPage extends StatefulWidget {
   State<SinewixFilmPage> createState() => _SinewixFilmPageState();
 }
 
-class _SinewixFilmPageState extends State<SinewixFilmPage> {
+class _SinewixFilmPageState extends State<SinewixFilmPage> with AutomaticKeepAliveClientMixin {
   final String _mainUrl = "https://ythls.kekikakademi.org";
   List<Movie> _movies = [];
   List<Movie> _filteredMovies = [];
@@ -204,6 +204,12 @@ class _SinewixFilmPageState extends State<SinewixFilmPage> {
   List<Movie> _recentlyWatched = [];
   Timer? _autoScrollTimer;
   int _currentRecentPage = 0;
+
+  // Movie detail cache'i ekle
+  final Map<int, MovieDetail> _movieDetailCache = {};
+  
+  // Image provider cache'i ekle
+  final Map<String, ImageProvider> _imageCache = {};
 
   final List<Category> _categories = [
     Category(id: "all", name: "Tüm Filmler", url: "/sinewix/movies"),
@@ -220,11 +226,14 @@ class _SinewixFilmPageState extends State<SinewixFilmPage> {
   ];
 
   @override
+  bool get wantKeepAlive => true; // Side menu'den dönüşte state'i koru
+
+  @override
   void initState() {
     super.initState();
     // Görüntü önbellek limitlerini ayarla
-    imageCache.maximumSize = 100; // Önbellekteki maksimum görüntü sayısı
-    imageCache.maximumSizeBytes = 50 * 1024 * 1024; // 50 MB maksimum önbellek boyutu
+    PaintingBinding.instance.imageCache.maximumSize = 200; // Arttırıldı
+    PaintingBinding.instance.imageCache.maximumSizeBytes = 100 * 1024 * 1024; // 100 MB'a çıkarıldı
     
     _selectedCategory = _categories.first.id;
     _scrollController.addListener(_scrollListener);
@@ -277,16 +286,13 @@ class _SinewixFilmPageState extends State<SinewixFilmPage> {
   }
 
   void _scrollListener() {
+    if (!_scrollController.hasClients) return;
+    
     if (_scrollController.position.pixels >
         _scrollController.position.maxScrollExtent - 1000) {
       if (!_isLoadingMore) {
         _loadMore();
       }
-    }
-
-    // Viewport dışındaki görüntüleri temizle
-    if (!_scrollController.position.isScrollingNotifier.value) {
-      _cleanupImages();
     }
   }
 
@@ -407,9 +413,35 @@ class _SinewixFilmPageState extends State<SinewixFilmPage> {
     }
   }
 
+  // Optimize edilmiş image provider getter'ı
+  ImageProvider _getOptimizedImageProvider(String imageUrl) {
+    if (_imageCache.containsKey(imageUrl)) {
+      return _imageCache[imageUrl]!;
+    }
+    
+    final provider = NetworkImage(
+      imageUrl,
+      headers: const {'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8'},
+    );
+    
+    _imageCache[imageUrl] = provider;
+    return provider;
+  }
+
+  // Movie detail fetch işlemini optimize et
   Future<void> _showMovieDetails(Movie movie) async {
     setState(() => _isLoading = true);
+    
     try {
+      // Cache'den kontrol et
+      if (_movieDetailCache.containsKey(movie.id)) {
+        if (!mounted) return;
+        _showMovieDetailDialog(_movieDetailCache[movie.id]!, movie);
+        return;
+      }
+
+      // ... existing fetch code ...
+
       final response = await http.get(
         Uri.parse('$_mainUrl/sinewix/movie/${movie.id}'),
         headers: {'Accept-Charset': 'utf-8'},
@@ -418,330 +450,12 @@ class _SinewixFilmPageState extends State<SinewixFilmPage> {
       if (response.statusCode == 200) {
         final data = json.decode(utf8.decode(response.bodyBytes));
         final movieDetail = MovieDetail.fromJson(data);
+        
+        // Cache'e ekle
+        _movieDetailCache[movie.id] = movieDetail;
 
         if (!mounted) return;
-
-        await showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => WillPopScope(
-            onWillPop: () async => false,
-            child: GestureDetector(
-              onTap: () {}, // Boş gesture detector arkaya tıklamayı engeller
-              child: Dialog(
-                backgroundColor: Colors.transparent,
-                child: FractionallySizedBox(
-                  widthFactor: 0.75,
-                  heightFactor: 0.85,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surface,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Column(
-                      children: [
-                        Expanded(
-                          child: CustomScrollView(
-                            slivers: [
-                              SliverAppBar(
-                                expandedHeight: 400,
-                                pinned: true,
-                                flexibleSpace: FlexibleSpaceBar(
-                                  background: Stack(
-                                    fit: StackFit.expand,
-                                    children: [
-                                      ClipRRect(
-                                        borderRadius: BorderRadius.circular(16),
-                                        child: movieDetail.backdropPathTv.isNotEmpty
-                                            ? Image.network(
-                                                movieDetail.backdropPathTv,
-                                                fit: BoxFit.cover,
-                                                errorBuilder: (context, error, stackTrace) => Container(
-                                                  color: Colors.grey[900],
-                                                  child: const Center(
-                                                    child: Icon(
-                                                      HugeIcons.strokeRoundedImageNotFound01,
-                                                      size: 50,
-                                                      color: Colors.grey,
-                                                    ),
-                                                  ),
-                                                ),
-                                              )
-                                            : Container(
-                                                color: Colors.grey[900],
-                                                child: const Center(
-                                                  child: Icon(
-                                                    HugeIcons.strokeRoundedImageNotFound01,
-                                                    size: 50,
-                                                    color: Colors.grey,
-                                                  ),
-                                                ),
-                                              ),
-                                      ),
-                                      Container(
-                                        decoration: BoxDecoration(
-                                          gradient: LinearGradient(
-                                            begin: Alignment.topCenter,
-                                            end: Alignment.bottomCenter,
-                                            colors: [
-                                              Colors.transparent,
-                                              Colors.black.withOpacity(0.7),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                      Center(
-                                        child: Row(
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          children: [
-                                            CircleAvatar(
-                                              radius: 35,
-                                              backgroundColor: Colors.black45,
-                                              child: IconButton(
-                                                icon: const Icon(
-                                                  HugeIcons.strokeRoundedPlay,
-                                                  size: 40,
-                                                  color: Colors.white,
-                                                ),
-                                                onPressed: () {
-                                                  // Film izlendiğinde son izlenenlere ekle
-                                                  _saveRecentMovie(movie);
-                                                  final videoUrl = movieDetail.videos.first.link;
-                                                  showDialog(
-                                                    context: context,
-                                                    builder: (context) => VideoPlayerDialog(
-                                                      videoUrl: videoUrl,
-                                                      title: movieDetail.title,
-                                                    ),
-                                                  );
-                                                },
-                                              ),
-                                            ),
-                                            const SizedBox(width: 16),
-                                            CircleAvatar(
-                                              radius: 35,
-                                              backgroundColor: Colors.black45,
-                                              child: IconButton(
-                                                icon: const Icon(
-                                                  HugeIcons.strokeRoundedDownload05,
-                                                  size: 40,
-                                                  color: Colors.white,
-                                                ),
-                                                onPressed: () {
-                                                  final videoUrl = movieDetail.videos.first.link;
-                                                  final title = movieDetail.title;
-                                                  Navigator.pop(context); // Dialog'u kapat
-                                                  _handleDownload(videoUrl, title); // İndirme işlemini başlat
-                                                },
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      Positioned(
-                                        left: 20,
-                                        bottom: 20,
-                                        right: 20,
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              movieDetail.title,
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 28,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 8),
-                                            Row(
-                                              children: [
-                                                Container(
-                                                  padding: const EdgeInsets.symmetric(
-                                                    horizontal: 8,
-                                                    vertical: 4,
-                                                  ),
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.amber,
-                                                    borderRadius: BorderRadius.circular(4),
-                                                  ),
-                                                  child: Row(
-                                                    children: [
-                                                      const Icon(HugeIcons.strokeRoundedStar, size: 16),
-                                                      const SizedBox(width: 4),
-                                                      Text(
-                                                        movieDetail.voteAverage.toStringAsFixed(1),
-                                                        style: const TextStyle(
-                                                          fontWeight: FontWeight.bold,
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 12),
-                                                Text(
-                                                  '${movieDetail.runtime} dk',
-                                                  style: const TextStyle(color: Colors.white),
-                                                ),
-                                                const SizedBox(width: 12),
-                                                Text(
-                                                  movieDetail.releaseDate,
-                                                  style: const TextStyle(color: Colors.white),
-                                                ),
-                                              ],
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                actions: [
-                                  IconButton(
-                                    icon: const Icon(Icons.close),
-                                    onPressed: () => Navigator.pop(context),
-                                  ),
-                                ],
-                              ),
-                              SliverToBoxAdapter(
-                                child: Padding(
-                                  padding: const EdgeInsets.all(20),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      if (movieDetail.genres.isNotEmpty) ...[
-                                        Wrap(
-                                          spacing: 8,
-                                          runSpacing: 8,
-                                          children: movieDetail.genres.map((genre) {
-                                            return Container(
-                                              padding: const EdgeInsets.symmetric(
-                                                horizontal: 12,
-                                                vertical: 6,
-                                              ),
-                                              decoration: BoxDecoration(
-                                                color: Theme.of(context)
-                                                    .colorScheme
-                                                    .primaryContainer,
-                                                borderRadius: BorderRadius.circular(20),
-                                              ),
-                                              child: Text(
-                                                genre,
-                                                style: TextStyle(
-                                                  color: Theme.of(context)
-                                                      .colorScheme
-                                                      .onPrimaryContainer,
-                                                ),
-                                              ),
-                                            );
-                                          }).toList(),
-                                        ),
-                                        const SizedBox(height: 24),
-                                      ],
-                                      Text(
-                                        'Özet',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleLarge
-                                            ?.copyWith(fontWeight: FontWeight.bold),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        movieDetail.overview,
-                                        style: Theme.of(context).textTheme.bodyLarge,
-                                      ),
-                                      const SizedBox(height: 24),
-                                      if (movieDetail.cast.isNotEmpty) ...[
-                                        Text(
-                                          'Oyuncular',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .titleLarge
-                                              ?.copyWith(fontWeight: FontWeight.bold),
-                                        ),
-                                        const SizedBox(height: 16),
-                                        SizedBox(
-                                          height: 150, // Yüksekliği artırdık
-                                          child: ListView.builder(
-                                            scrollDirection: Axis.horizontal,
-                                            itemCount: movieDetail.cast.length,
-                                            itemBuilder: (context, index) {
-                                              final cast = movieDetail.cast[index];
-                                              return Padding(
-                                                padding: const EdgeInsets.only(right: 16),
-                                                child: SizedBox(
-                                                  width: 100,
-                                                  child: Column(
-                                                    mainAxisSize: MainAxisSize.min,
-                                                    children: [
-                                                      Container(
-                                                        width: 80,
-                                                        height: 80,
-                                                        decoration: BoxDecoration(
-                                                          shape: BoxShape.circle,
-                                                          boxShadow: [
-                                                            BoxShadow(
-                                                              color: Colors.black.withOpacity(0.2),
-                                                              blurRadius: 8,
-                                                              offset: const Offset(0, 4),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                        child: CircleAvatar(
-                                                          backgroundImage: cast.profilePath != null
-                                                              ? NetworkImage(cast.profilePath!)
-                                                              : null,
-                                                          child: cast.profilePath == null
-                                                              ? const Icon(HugeIcons.strokeRoundedUser, size: 40)
-                                                              : null,
-                                                        ),
-                                                      ),
-                                                      const SizedBox(height: 8),
-                                                      Text(
-                                                        cast.name,
-                                                        style: const TextStyle(
-                                                          fontWeight: FontWeight.w500,
-                                                          fontSize: 12,
-                                                        ),
-                                                        textAlign: TextAlign.center,
-                                                        maxLines: 2,
-                                                        overflow: TextOverflow.ellipsis,
-                                                      ),
-                                                      const SizedBox(height: 4),
-                                                      Text(
-                                                        cast.character,
-                                                        style: Theme.of(context)
-                                                            .textTheme
-                                                            .bodySmall
-                                                            ?.copyWith(fontSize: 11),
-                                                        textAlign: TextAlign.center,
-                                                        maxLines: 1,
-                                                        overflow: TextOverflow.ellipsis,
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              );
-                                            },
-                                          ),
-                                        ),
-                                      ],
-                                      const SizedBox(height: 24),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
+        _showMovieDetailDialog(movieDetail, movie);
       }
     } catch (e) {
       debugPrint('Error fetching movie details: $e');
@@ -750,6 +464,331 @@ class _SinewixFilmPageState extends State<SinewixFilmPage> {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  // Movie detail dialog'unu ayrı bir metoda taşı
+  void _showMovieDetailDialog(MovieDetail movieDetail, Movie movie) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => WillPopScope(
+        onWillPop: () async => false,
+        child: GestureDetector(
+          onTap: () {}, // Boş gesture detector arkaya tıklamayı engeller
+          child: Dialog(
+            backgroundColor: Colors.transparent,
+            child: FractionallySizedBox(
+              widthFactor: 0.75,
+              heightFactor: 0.85,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: CustomScrollView(
+                        slivers: [
+                          SliverAppBar(
+                            expandedHeight: 400,
+                            pinned: true,
+                            flexibleSpace: FlexibleSpaceBar(
+                              background: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(16),
+                                    child: movieDetail.backdropPathTv.isNotEmpty
+                                        ? Image.network(
+                                            movieDetail.backdropPathTv,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (context, error, stackTrace) => Container(
+                                              color: Colors.grey[900],
+                                              child: const Center(
+                                                child: Icon(
+                                                  HugeIcons.strokeRoundedImageNotFound01,
+                                                  size: 50,
+                                                  color: Colors.grey,
+                                                ),
+                                              ),
+                                            ),
+                                          )
+                                        : Container(
+                                            color: Colors.grey[900],
+                                            child: const Center(
+                                              child: Icon(
+                                                HugeIcons.strokeRoundedImageNotFound01,
+                                                size: 50,
+                                                color: Colors.grey,
+                                              ),
+                                            ),
+                                          ),
+                                  ),
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topCenter,
+                                        end: Alignment.bottomCenter,
+                                        colors: [
+                                          Colors.transparent,
+                                          Colors.black.withOpacity(0.7),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  Center(
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        CircleAvatar(
+                                          radius: 35,
+                                          backgroundColor: Colors.black45,
+                                          child: IconButton(
+                                            icon: const Icon(
+                                              HugeIcons.strokeRoundedPlay,
+                                              size: 40,
+                                              color: Colors.white,
+                                            ),
+                                            onPressed: () {
+                                              // Film izlendiğinde son izlenenlere ekle
+                                              _saveRecentMovie(movie);
+                                              final videoUrl = movieDetail.videos.first.link;
+                                              showDialog(
+                                                context: context,
+                                                builder: (context) => VideoPlayerDialog(
+                                                  videoUrl: videoUrl,
+                                                  title: movieDetail.title,
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                        const SizedBox(width: 16),
+                                        CircleAvatar(
+                                          radius: 35,
+                                          backgroundColor: Colors.black45,
+                                          child: IconButton(
+                                            icon: const Icon(
+                                              HugeIcons.strokeRoundedDownload05,
+                                              size: 40,
+                                              color: Colors.white,
+                                            ),
+                                            onPressed: () {
+                                              final videoUrl = movieDetail.videos.first.link;
+                                              final title = movieDetail.title;
+                                              Navigator.pop(context); // Dialog'u kapat
+                                              _handleDownload(videoUrl, title); // İndirme işlemini başlat
+                                            },
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Positioned(
+                                    left: 20,
+                                    bottom: 20,
+                                    right: 20,
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          movieDetail.title,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 28,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Row(
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 8,
+                                                vertical: 4,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: Colors.amber,
+                                                borderRadius: BorderRadius.circular(4),
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  const Icon(HugeIcons.strokeRoundedStar, size: 16),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    movieDetail.voteAverage.toStringAsFixed(1),
+                                                    style: const TextStyle(
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Text(
+                                              '${movieDetail.runtime} dk',
+                                              style: const TextStyle(color: Colors.white),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Text(
+                                              movieDetail.releaseDate,
+                                              style: const TextStyle(color: Colors.white),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            actions: [
+                              IconButton(
+                                icon: const Icon(Icons.close),
+                                onPressed: () => Navigator.pop(context),
+                              ),
+                            ],
+                          ),
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.all(20),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (movieDetail.genres.isNotEmpty) ...[
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: movieDetail.genres.map((genre) {
+                                        return Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 6,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .primaryContainer,
+                                            borderRadius: BorderRadius.circular(20),
+                                          ),
+                                          child: Text(
+                                            genre,
+                                            style: TextStyle(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .onPrimaryContainer,
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                    const SizedBox(height: 24),
+                                  ],
+                                  Text(
+                                    'Özet',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleLarge
+                                        ?.copyWith(fontWeight: FontWeight.bold),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    movieDetail.overview,
+                                    style: Theme.of(context).textTheme.bodyLarge,
+                                  ),
+                                  const SizedBox(height: 24),
+                                  if (movieDetail.cast.isNotEmpty) ...[
+                                    Text(
+                                      'Oyuncular',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleLarge
+                                          ?.copyWith(fontWeight: FontWeight.bold),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    SizedBox(
+                                      height: 150, // Yüksekliği artırdık
+                                      child: ListView.builder(
+                                        scrollDirection: Axis.horizontal,
+                                        itemCount: movieDetail.cast.length,
+                                        itemBuilder: (context, index) {
+                                          final cast = movieDetail.cast[index];
+                                          return Padding(
+                                            padding: const EdgeInsets.only(right: 16),
+                                            child: SizedBox(
+                                              width: 100,
+                                              child: Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Container(
+                                                    width: 80,
+                                                    height: 80,
+                                                    decoration: BoxDecoration(
+                                                      shape: BoxShape.circle,
+                                                      boxShadow: [
+                                                        BoxShadow(
+                                                          color: Colors.black.withOpacity(0.2),
+                                                          blurRadius: 8,
+                                                          offset: const Offset(0, 4),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    child: CircleAvatar(
+                                                      backgroundImage: cast.profilePath != null
+                                                          ? NetworkImage(cast.profilePath!)
+                                                          : null,
+                                                      child: cast.profilePath == null
+                                                          ? const Icon(HugeIcons.strokeRoundedUser, size: 40)
+                                                          : null,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 8),
+                                                  Text(
+                                                    cast.name,
+                                                    style: const TextStyle(
+                                                      fontWeight: FontWeight.w500,
+                                                      fontSize: 12,
+                                                    ),
+                                                    textAlign: TextAlign.center,
+                                                    maxLines: 2,
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    cast.character,
+                                                    style: Theme.of(context)
+                                                        .textTheme
+                                                        .bodySmall
+                                                        ?.copyWith(fontSize: 11),
+                                                    textAlign: TextAlign.center,
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  ],
+                                  const SizedBox(height: 24),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildRecentlyWatchedSection() {
@@ -807,6 +846,36 @@ class _SinewixFilmPageState extends State<SinewixFilmPage> {
     );
   }
 
+  // Image widget'ını optimize et
+  Widget _buildOptimizedImage(String imageUrl) {
+    return Image(
+      image: _getOptimizedImageProvider(imageUrl),
+      fit: BoxFit.cover,
+      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+        if (wasSynchronouslyLoaded) return child;
+        return AnimatedSwitcher(
+          duration: const Duration(milliseconds: 300),
+          child: frame != null
+              ? child
+              : Container(
+                  color: Colors.grey[800],
+                  child: const Center(
+                    child: CircularProgressIndicator(),
+                  ),
+                ),
+        );
+      },
+      errorBuilder: (context, error, stackTrace) => Container(
+        color: Colors.grey[900],
+        child: const Icon(
+          Icons.error_outline,
+          color: Colors.white54,
+        ),
+      ),
+      filterQuality: FilterQuality.medium,
+    );
+  }
+
   Widget _buildMovieCard(Movie movie) {
     return Card(
       elevation: 0,
@@ -828,24 +897,7 @@ class _SinewixFilmPageState extends State<SinewixFilmPage> {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Image.network(
-                    movie.posterPath,
-                    fit: BoxFit.cover,
-                    frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-                      if (wasSynchronouslyLoaded) return child;
-                      return AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 300),
-                        child: frame != null
-                            ? child
-                            : Container(
-                                color: Colors.grey[800],
-                                child: const Center(
-                                  child: CircularProgressIndicator(),
-                                ),
-                              ),
-                      );
-                    },
-                  ),
+                  _buildOptimizedImage(movie.posterPath),
                   Positioned(
                     top: 8,
                     right: 8,
@@ -902,6 +954,7 @@ class _SinewixFilmPageState extends State<SinewixFilmPage> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Scaffold(
       body: Column(
         children: [
@@ -1026,39 +1079,7 @@ class _SinewixFilmPageState extends State<SinewixFilmPage> {
                                       child: Stack(
                                         fit: StackFit.expand,
                                         children: [
-                                          Image.network(
-                                            movie.posterPath,
-                                            fit: BoxFit.cover,
-                                            width: double.infinity, // Bunu ekledik
-                                            height: double.infinity, // Bunu ekledik
-                                            // Görüntü yükleme optimizasyonları
-                                            frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-                                              if (wasSynchronouslyLoaded) return child;
-                                              return AnimatedSwitcher(
-                                                duration: const Duration(milliseconds: 300),
-                                                child: frame != null
-                                                    ? child
-                                                    : Container(
-                                                        color: Colors.grey[800],
-                                                        child: const Center(
-                                                          child: CircularProgressIndicator(),
-                                                        ),
-                                                      ),
-                                              );
-                                            },
-                                            errorBuilder: (context, error, stackTrace) =>
-                                                Container(
-                                                  color: Colors.grey[900],
-                                                  child: const Icon(
-                                                    Icons.error_outline,
-                                                    color: Colors.white54,
-                                                  ),
-                                                ),
-                                            // Görüntü kalitesi ve boyut optimizasyonları  
-                                            cacheWidth: (constraints.maxWidth * 2).toInt(),
-                                            cacheHeight: (constraints.maxHeight * 2).toInt(),
-                                            filterQuality: FilterQuality.medium,
-                                          ),
+                                          _buildOptimizedImage(movie.posterPath),
                                           Positioned(
                                             top: 8,
                                             right: 8,
@@ -1137,6 +1158,10 @@ class _SinewixFilmPageState extends State<SinewixFilmPage> {
 
   @override
   void dispose() {
+    // Cache'leri temizle
+    _movieDetailCache.clear();
+    _imageCache.clear();
+    
     _autoScrollTimer?.cancel();
     _recentMoviesController.dispose();
     // Belleği temizle
@@ -1145,24 +1170,6 @@ class _SinewixFilmPageState extends State<SinewixFilmPage> {
     _searchController.dispose();
     _scrollController.dispose();
     super.dispose();
-  }
-
-  // Yeni metod: Viewport dışındaki görüntüleri temizle
-  void _cleanupImages() {
-    final RenderBox? renderBox = context.findRenderObject() as RenderBox?;
-    if (renderBox == null) return;
-
-    final viewport = renderBox.paintBounds;
-    final firstVisible = (_scrollController.position.pixels / 200).floor();
-    final lastVisible = ((_scrollController.position.pixels + viewport.height) / 200).ceil();
-
-    // Viewport dışındaki görüntüleri önbellekten temizle
-    for (var i = 0; i < _filteredMovies.length; i++) {
-      if (i < firstVisible - 20 || i > lastVisible + 20) {
-        final movie = _filteredMovies[i];
-        imageCache.evict(NetworkImage(movie.posterPath));
-      }
-    }
   }
 
   Future<void> _handleDownload(String videoUrl, String title) async {
