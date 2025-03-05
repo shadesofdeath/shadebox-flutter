@@ -94,7 +94,16 @@ class _VideoPlayerDialogState extends State<VideoPlayerDialog> {
         }
       }
 
+      // Özel header'ları ayarla
       final headers = widget.headers ?? <String, String>{};
+      headers.addAll({
+        'User-Agent': 'googleusercontent',
+        'Referer': 'https://twitter.com/',
+      });
+
+      // If-None-Match header'ını kaldır (eğer varsa)
+      headers.remove('If-None-Match');
+
       if (widget.userAgent != null) {
         headers['User-Agent'] = widget.userAgent!;
       }

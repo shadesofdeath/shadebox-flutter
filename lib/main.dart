@@ -173,9 +173,9 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   ];
 
   final List<_MenuItem> _menuItems = [
-    _MenuItem('Film', HugeIcons.strokeRoundedVideo01),
-    _MenuItem('Dizi', HugeIcons.strokeRoundedVideoReplay),
-    _MenuItem('Anime', HugeIcons.strokeRoundedTongue),
+    _MenuItem('SineWix Film', HugeIcons.strokeRoundedVideo01),
+    _MenuItem('SineWix Dizi', HugeIcons.strokeRoundedVideoReplay),
+    _MenuItem('SineWix Anime', HugeIcons.strokeRoundedTongue),
     _MenuItem('RecTV Film', HugeIcons.strokeRoundedVideo01),
     _MenuItem('RecTV Dizi', HugeIcons.strokeRoundedVideoReplay),
     _MenuItem('RecTV Canlı', HugeIcons.strokeRoundedTv01),

@@ -798,6 +798,10 @@ class _SinewixDiziPageState extends State<SinewixDiziPage> {
                                                                     videoUrl: episode.videos.first.link, // API'den gelen link
                                                                     title:
                                                                         '${tvShowDetail.title} - ${season.name} - ${episode.episodeNumber}. Bölüm',
+                                                                    headers: {
+                                                                      'User-Agent': 'googleusercontent',
+                                                                      'Referer': 'https://twitter.com/',
+                                                                    },
                                                                   ),
                                                                 );
                                                               },
